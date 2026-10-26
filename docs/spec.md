@@ -53,3 +53,8 @@ Codex status callbacks enter a durable FIFO event queue. Events are delivered to
 Filesystem and network capability are orthogonal PM decisions. `access` is `read` or `write`; `network` is `none` or `local`. `local` selects a namespaced Codex permission profile that allows only loopback hosts (`localhost`, `127.0.0.1`, `::1`) while retaining the requested filesystem policy. In particular, `read + local` must be able to exercise a host preview server without gaining write access to the project.
 
 Every Codex invocation explicitly passes the model and reasoning effort. Defaults are `gpt-5.6-luna` and `xhigh`; no bridge job may silently inherit a changed global/UI model setting.
+
+
+## Chat conversation handoff
+
+A project binding is durable and replaceable. `rebind` changes only the single active ChatGPT callback destination and increments a binding version; active jobs, watcher PIDs and pending events are not restarted or rewritten. Previous bindings are kept in local runtime history. `handoff` returns a structured summary of project binding, active/recent jobs, pending events and execution defaults without exposing prompt/result contents.

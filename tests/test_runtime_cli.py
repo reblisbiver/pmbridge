@@ -61,3 +61,39 @@ class PMCliParsingTests(unittest.TestCase):
         args = cli.build_parser().parse_args(['pm','busy','--reason','review','--minutes','5','--home','/tmp/x','--json'])
         self.assertEqual(args.home, '/tmp/x')
         self.assertTrue(args.json)
+
+class RebindCliTests(unittest.TestCase):
+    def test_rebind_parser_accepts_safe_chat_markers(self):
+        args = cli.build_parser().parse_args(['rebind','demo','--chat-bind-text','hello','--chat-bind-text','world','--json'])
+        self.assertEqual(args.command, 'rebind')
+        self.assertEqual(args.project, 'demo')
+        self.assertEqual(args.chat_bind_text, ['hello','world'])
+        self.assertTrue(args.json)
+
+    def test_handoff_parser(self):
+        args = cli.build_parser().parse_args(['handoff','demo','--json'])
+        self.assertEqual(args.command, 'handoff')
+        self.assertEqual(args.project, 'demo')
+        self.assertTrue(args.json)
+
+    @patch('pmbridge.cli.doctor.check')
+    @patch('pmbridge.cli.binding.rebind')
+    @patch('pmbridge.cli.transport_edge.find_chat_by_texts')
+    def test_rebind_uses_unique_discovery_then_doctor(self, discover, rebind, doctor_check):
+        discover.return_value = {'status':'FOUND','url':'https://chatgpt.com/c/new'}
+        rebind.return_value = {'status':'READY','project':'demo','chat_url':'https://chatgpt.com/c/new','binding_version':2}
+        doctor_check.return_value = {'status':'READY','project':'demo','checks':[]}
+        args = cli.build_parser().parse_args(['rebind','demo','--chat-bind-text','hello','--json'])
+        result = cli.rebind_project(Path('/tmp/home'), args)
+        discover.assert_called_once()
+        rebind.assert_called_once_with(Path('/tmp/home'), 'demo', 'https://chatgpt.com/c/new', source='chat-bind-text')
+        doctor_check.assert_called_once_with(Path('/tmp/home'), 'demo')
+        self.assertEqual(result['status'],'READY')
+        self.assertEqual(result['doctor']['status'],'READY')
+
+    @patch('pmbridge.cli.transport_edge.find_chat_by_texts')
+    def test_failed_discovery_does_not_rebind(self, discover):
+        discover.return_value = {'status':'AMBIGUOUS_CHAT_BINDING','matches':['a','b']}
+        args = cli.build_parser().parse_args(['rebind','demo','--chat-bind-text','hello','--json'])
+        result = cli.rebind_project(Path('/tmp/home'), args)
+        self.assertEqual(result['status'],'AMBIGUOUS_CHAT_BINDING')

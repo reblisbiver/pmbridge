@@ -63,6 +63,8 @@ These are conventions, not fixed roles. The PM can create any role names and cho
 ```text
 pmbridge bootstrap   Configure a project and install/update the stable runtime
 pmbridge doctor      Check project, Codex, Edge, ChatGPT tab and supervisor health
+pmbridge handoff     Show durable state for a replacement ChatGPT PM conversation
+pmbridge rebind      Move a project callback binding to a new ChatGPT conversation
 pmbridge run         Launch an approved Codex task; requires --access read|write and supports --network none|local
 pmbridge smoke       Launch a no-op end-to-end validation job
 pmbridge recovery    Scan/recover active jobs
@@ -97,3 +99,8 @@ Existing project-specific bridges can remain independent. PMBridge does not requ
 ## Codex permission profiles
 
 Bootstrap installs namespaced Codex profiles `pmbridge-read-local` and `pmbridge-write-local` under `$CODEX_HOME` (normally `~/.codex`). They are selected explicitly only for jobs using `--network local`. The read-local profile keeps the filesystem read-only while permitting full HTTP methods only to loopback hosts; it does not grant general internet access.
+
+
+## Moving to a new ChatGPT conversation
+
+When the PM conversation fills its context window, do not create a new bridge. In the new ChatGPT conversation, read `CHATGPT_SETUP.md`, then run `pmbridge handoff <project> --json` to inspect the durable state and `pmbridge rebind <project> --chat-bind-text ... --json` to make the new conversation the single active callback destination. Running jobs and pending callbacks are preserved.

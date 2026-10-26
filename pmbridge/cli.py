@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from . import config, doctor, events, executor, gitops, jobs, launchd, pm_state, recovery, runtime, state, transport_edge, watcher
+from . import binding, config, doctor, events, executor, gitops, jobs, launchd, pm_state, recovery, runtime, state, transport_edge, watcher
 
 
 def emit(payload, as_json):
@@ -112,6 +112,25 @@ def notify_job(home: Path, job_id: str, status_text: str) -> dict:
     return {'ok': True, 'queued': True, 'event': event}
 
 
+def rebind_project(home: Path, args) -> dict:
+    if args.chat_url:
+        url = args.chat_url
+        source = 'explicit-url'
+    elif args.chat_bind_text:
+        found = transport_edge.find_chat_by_texts(args.chat_bind_text, attempts=4, delay=0.25, timeout=2.0)
+        if found.get('status') != 'FOUND':
+            return found
+        url = found['url']
+        source = 'chat-bind-text'
+    else:
+        return {'status':'NEEDS_CHAT_BINDING'}
+    result = binding.rebind(home, args.project, url, source=source)
+    result['doctor'] = doctor.check(home, args.project)
+    if result['doctor'].get('status') != 'READY':
+        result['status'] = 'NOT_READY'
+    return result
+
+
 def build_parser():
     ap = argparse.ArgumentParser(prog='pmbridge')
     sub = ap.add_subparsers(dest='command', required=True)
@@ -174,6 +193,18 @@ def build_parser():
     dr.add_argument('--quiet-background-seconds', type=float, default=4.0)
     dr.add_argument('--json', action='store_true')
 
+    rb = sub.add_parser('rebind')
+    rb.add_argument('project')
+    rb.add_argument('--chat-url')
+    rb.add_argument('--chat-bind-text', action='append')
+    rb.add_argument('--home')
+    rb.add_argument('--json', action='store_true')
+
+    ho = sub.add_parser('handoff')
+    ho.add_argument('project')
+    ho.add_argument('--home')
+    ho.add_argument('--json', action='store_true')
+
     pp = sub.add_parser('pm')
     psub = pp.add_subparsers(dest='pm_command', required=True)
     pb = psub.add_parser('busy'); pb.add_argument('--reason', default='supervisor_work'); pb.add_argument('--minutes', type=int, default=30); pb.add_argument('--home'); pb.add_argument('--json', action='store_true')
@@ -218,6 +249,14 @@ def main(argv=None):
         return 0
     if args.command == 'drain':
         result = events.drain(home, wait_seconds=args.wait_seconds, quiet_focused_seconds=args.quiet_focused_seconds, quiet_background_seconds=args.quiet_background_seconds)
+        emit(result, args.json)
+        return 0
+    if args.command == 'rebind':
+        result = rebind_project(home, args)
+        emit(result, args.json)
+        return 0 if result.get('status') == 'READY' else 5
+    if args.command == 'handoff':
+        result = binding.handoff(home, args.project)
         emit(result, args.json)
         return 0
     if args.command == 'pm':

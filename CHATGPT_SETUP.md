@@ -120,3 +120,23 @@ Only then create the remote and perform the initial push through the appropriate
 ## Stability rule
 
 Do not reconstruct PMBridge internals from memory. Always prefer the installed CLI's `--json` output and this protocol. If CLI output conflicts with older chat context, the current CLI output is the source of truth.
+
+
+## Replacing a full ChatGPT PM conversation
+
+When this ChatGPT conversation is approaching its context limit, start a new ChatGPT conversation rather than rebuilding PMBridge. In the new conversation:
+
+1. Read this file.
+2. Run `~/.pmbridge/bin/pmbridge handoff <project-name> --json` to load the durable execution state.
+3. Rebind the project using two distinctive recent user-message fragments from the **new** conversation:
+
+```bash
+~/.pmbridge/bin/pmbridge rebind <project-name> \
+  --chat-bind-text "<new-chat distinctive user text>" \
+  --chat-bind-text "<another new-chat user text>" \
+  --json
+```
+
+A successful rebind increments the binding version, records the previous binding in local history, and runs doctor against the new conversation. It does not restart Codex jobs or rewrite pending events. Pending events resolve the project's active chat URL only when drained, so they follow the project to the new conversation.
+
+Treat only one binding as active. Do not keep two PM conversations competing for the same project.
