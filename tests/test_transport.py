@@ -14,8 +14,8 @@ class EdgeTransportTests(unittest.TestCase):
         self.assertIn('repeat with sendAttempt from 1 to 1', s)
         self.assertIn('if URL of t is targetURL', s)
         self.assertIn('PM_CHAT_URL is required', s)
-        self.assertNotIn('6addf4d5', s)
-        self.assertNotIn('/Users/darwin', s)
+        self.assertNotIn('https://chatgpt.com/c/', s)
+        self.assertNotIn('/Users/', s)
         self.assertNotIn('activate', s.lower())
         self.assertNotIn('system events', s.lower())
         self.assertNotIn('keystroke', s.lower())
@@ -36,3 +36,18 @@ class EdgeTransportTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class DiscoverChatTests(unittest.TestCase):
+    @patch('pmbridge.transport_edge.subprocess.run')
+    def test_current_chat_url_returns_active_chatgpt_conversation(self, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = 'https://chatgpt.com/c/abc123\n'
+        run.return_value.stderr = ''
+        self.assertEqual(transport_edge.current_chat_url(), 'https://chatgpt.com/c/abc123')
+
+    @patch('pmbridge.transport_edge.subprocess.run')
+    def test_current_chat_url_rejects_non_conversation_tab(self, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = 'https://chatgpt.com/\n'
+        run.return_value.stderr = ''
+        self.assertIsNone(transport_edge.current_chat_url())
