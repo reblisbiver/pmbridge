@@ -38,4 +38,4 @@ PMBridge is a private-reuse-first local bridge that lets a ChatGPT web conversat
 - ChatGPT never creates a GitHub remote without a separate explicit user confirmation.
 
 ## Existing bridges
-Bayesian Hardle and IO Job Hunter remain independent legacy installations. This project does not migrate or alter their execution modes.
+Existing project-specific bridges remain independent legacy installations. This project does not migrate or alter their execution modes.
