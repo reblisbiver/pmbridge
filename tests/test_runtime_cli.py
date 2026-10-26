@@ -20,18 +20,17 @@ class RuntimeTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
-    @patch('pmbridge.cli.transport_edge.send')
-    def test_notify_loads_project_chat_url(self, send):
-        send.return_value = {'ok': True, 'returncode': 0, 'error': ''}
+    @patch('pmbridge.cli.spawn_event_drain')
+    @patch('pmbridge.cli.events.enqueue_job_event')
+    def test_notify_queues_event_and_starts_single_drain(self, enqueue, drain):
+        enqueue.return_value = {'event_id':'e1','job_id':'j','status':'completed'}
         with tempfile.TemporaryDirectory() as td:
             home = Path(td)
-            (home/'projects'/'demo').mkdir(parents=True)
-            (home/'projects'/'demo'/'config.json').write_text('{"version":1,"name":"demo","repo":"/tmp/demo","chat_url":"https://chatgpt.com/c/demo","stall_seconds":1200}')
-            (home/'jobs').mkdir()
-            (home/'jobs'/'j.json').write_text('{"job_id":"j","project":"demo","status":"completed"}')
             out = cli.notify_job(home, 'j', 'completed')
-            self.assertTrue(out['ok'])
-            send.assert_called_once_with('https://chatgpt.com/c/demo', 'PM_JOB_STATUS j completed', home)
+            self.assertTrue(out['queued'])
+            enqueue.assert_called_once_with(home, 'j', 'completed')
+            drain.assert_called_once_with(home)
+
 
     @patch('pmbridge.cli.spawn_watcher')
     def test_run_project_creates_job_and_spawns_watcher(self, spawn):
@@ -48,3 +47,15 @@ class CliTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class PMCliParsingTests(unittest.TestCase):
+    def test_pm_status_accepts_json_after_subcommand(self):
+        args = cli.build_parser().parse_args(['pm','status','--json'])
+        self.assertEqual(args.command, 'pm')
+        self.assertEqual(args.pm_command, 'status')
+        self.assertTrue(args.json)
+
+    def test_pm_busy_accepts_home_and_json_after_subcommand(self):
+        args = cli.build_parser().parse_args(['pm','busy','--reason','review','--minutes','5','--home','/tmp/x','--json'])
+        self.assertEqual(args.home, '/tmp/x')
+        self.assertTrue(args.json)

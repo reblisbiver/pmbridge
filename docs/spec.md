@@ -39,3 +39,11 @@ PMBridge is a private-reuse-first local bridge that lets a ChatGPT web conversat
 
 ## Existing bridges
 Existing project-specific bridges remain independent legacy installations. This project does not migrate or alter their execution modes.
+
+## Concurrent PM orchestration
+
+PMBridge supports multiple simultaneous Codex jobs. Concurrency policy is controlled by the PM at dispatch time, not hard-coded at project level. Each job carries `role`, `access`, optional `target`, `model`, and `reasoning_effort`. Recommended workflows may use one writer and multiple readers, but the framework does not enforce that topology.
+
+All Codex invocations explicitly pin their execution model. V0.1 defaults are `gpt-5.6-luna` with `xhigh` reasoning; per-job overrides are supported.
+
+Codex status callbacks enter a durable FIFO event queue. Events are delivered to ChatGPT only after the PM logical state and web UI are both idle. This prevents concurrent worker completions from interrupting the PM or the user's active interaction.

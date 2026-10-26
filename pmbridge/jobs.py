@@ -3,26 +3,53 @@ import uuid
 from pathlib import Path
 
 from . import state
+from .executor import DEFAULT_MODEL, DEFAULT_REASONING_EFFORT
 
 
-def tag_instruction(job_id: str, instruction: str) -> str:
-    return f'[PM_BRIDGE_TASK:{job_id}]\n{instruction.strip()}'
+def tag_instruction(job_id: str, instruction: str, role: str = 'worker', access: str = 'write', target=None) -> str:
+    lines = [
+        f'[PM_BRIDGE_TASK:{job_id}]',
+        f'[PM_ROLE:{role}]',
+        f'[ACCESS:{access}]',
+    ]
+    if target:
+        lines.append(f'[TARGET:{target}]')
+    lines.append(instruction.strip())
+    return '\n'.join(lines)
 
 
-def create_job(home: Path, project: str, repo: Path, instruction: str, stall_seconds: int = 1200) -> dict:
+def create_job(
+    home: Path,
+    project: str,
+    repo: Path,
+    instruction: str,
+    stall_seconds: int = 1200,
+    role: str = 'worker',
+    access: str = 'write',
+    target=None,
+    model: str = DEFAULT_MODEL,
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+) -> dict:
+    if access not in {'read', 'write'}:
+        raise ValueError(f'unsupported access mode: {access}')
     job_id = str(uuid.uuid4())
     jobs_dir = home.expanduser() / 'jobs'
     jobs_dir.mkdir(parents=True, exist_ok=True)
     prompt = jobs_dir / f'{job_id}.prompt.txt'
     output = jobs_dir / f'{job_id}.log'
     result = jobs_dir / f'{job_id}.result.txt'
-    prompt.write_text(tag_instruction(job_id, instruction) + '\n', encoding='utf-8')
+    prompt.write_text(tag_instruction(job_id, instruction, role=role, access=access, target=target) + '\n', encoding='utf-8')
     output.touch()
     now = time.time()
     job = {
         'version': 1,
         'job_id': job_id,
         'project': project,
+        'role': role,
+        'access': access,
+        'target': target,
+        'model': model,
+        'reasoning_effort': reasoning_effort,
         'status': 'starting',
         'repo': str(repo.resolve()),
         'pid': None,

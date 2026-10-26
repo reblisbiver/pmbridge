@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from . import config, doctor, gitops, jobs, launchd, recovery, runtime, state, transport_edge, watcher
+from . import config, doctor, events, executor, gitops, jobs, launchd, pm_state, recovery, runtime, state, transport_edge, watcher
 
 
 def emit(payload, as_json):
@@ -45,6 +45,8 @@ def bootstrap(args):
         'repo': str(repo),
         'chat_url': chat_url,
         'stall_seconds': args.stall_seconds,
+        'default_model': executor.DEFAULT_MODEL,
+        'default_reasoning_effort': executor.DEFAULT_REASONING_EFFORT,
     }
     home = home_path(args.home)
     config_path = config.save_project(home, cfg)
@@ -69,18 +71,44 @@ def spawn_watcher(home: Path, job_id: str):
     )
 
 
-def run_project(home: Path, project: str, instruction: str) -> dict:
+def run_project(
+    home: Path,
+    project: str,
+    instruction: str,
+    role: str = 'worker',
+    access: str = 'write',
+    target=None,
+    model: str = executor.DEFAULT_MODEL,
+    reasoning_effort: str = executor.DEFAULT_REASONING_EFFORT,
+) -> dict:
     cfg = config.load_project(home, project)
-    job = jobs.create_job(home, project, Path(cfg['repo']), instruction, int(cfg.get('stall_seconds', 1200)))
+    job = jobs.create_job(
+        home, project, Path(cfg['repo']), instruction, int(cfg.get('stall_seconds', 1200)),
+        role=role, access=access, target=target, model=model, reasoning_effort=reasoning_effort,
+    )
     proc = spawn_watcher(home, job['job_id'])
     state.safe_transition(home/'jobs'/f"{job['job_id']}.json", watcher_pid=proc.pid)
-    return {'status': 'STARTED', 'project': project, 'job_id': job['job_id'], 'watcher_pid': proc.pid}
+    return {
+        'status': 'STARTED', 'project': project, 'job_id': job['job_id'], 'watcher_pid': proc.pid,
+        'role': role, 'access': access, 'target': target, 'model': model, 'reasoning_effort': reasoning_effort,
+    }
+
+
+def spawn_event_drain(home: Path, wait_seconds: int = 180):
+    return subprocess.Popen(
+        [str(home/'bin'/'pmbridge'), 'drain', '--home', str(home), '--wait-seconds', str(wait_seconds), '--json'],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+    )
 
 
 def notify_job(home: Path, job_id: str, status_text: str) -> dict:
-    job = state.load_job(home/'jobs'/f'{job_id}.json')
-    cfg = config.load_project(home, job['project'])
-    return transport_edge.send(cfg['chat_url'], f'PM_JOB_STATUS {job_id} {status_text}', home)
+    event = events.enqueue_job_event(home, job_id, status_text)
+    if event.get('status') != 'DEDUPED':
+        try:
+            spawn_event_drain(home)
+        except FileNotFoundError:
+            pass
+    return {'ok': True, 'queued': True, 'event': event}
 
 
 def build_parser():
@@ -108,6 +136,11 @@ def build_parser():
     group = rp.add_mutually_exclusive_group(required=True)
     group.add_argument('--instruction')
     group.add_argument('--file', type=Path)
+    rp.add_argument('--role', default='worker')
+    rp.add_argument('--access', choices=['read','write'], required=True)
+    rp.add_argument('--target')
+    rp.add_argument('--model', default=executor.DEFAULT_MODEL)
+    rp.add_argument('--reasoning-effort', default=executor.DEFAULT_REASONING_EFFORT)
     rp.add_argument('--home')
     rp.add_argument('--json', action='store_true')
 
@@ -131,6 +164,19 @@ def build_parser():
     wp.add_argument('--home')
     wp.add_argument('--attach', action='store_true')
     wp.add_argument('--json', action='store_true')
+
+    dr = sub.add_parser('drain')
+    dr.add_argument('--home')
+    dr.add_argument('--wait-seconds', type=float, default=0.0)
+    dr.add_argument('--quiet-focused-seconds', type=float, default=12.0)
+    dr.add_argument('--quiet-background-seconds', type=float, default=4.0)
+    dr.add_argument('--json', action='store_true')
+
+    pp = sub.add_parser('pm')
+    psub = pp.add_subparsers(dest='pm_command', required=True)
+    pb = psub.add_parser('busy'); pb.add_argument('--reason', default='supervisor_work'); pb.add_argument('--minutes', type=int, default=30); pb.add_argument('--home'); pb.add_argument('--json', action='store_true')
+    pi = psub.add_parser('idle'); pi.add_argument('--home'); pi.add_argument('--json', action='store_true')
+    ps = psub.add_parser('status'); ps.add_argument('--home'); ps.add_argument('--json', action='store_true')
     return ap
 
 
@@ -147,12 +193,12 @@ def main(argv=None):
         return 0 if result['status'] == 'READY' else 3
     if args.command == 'run':
         instruction = args.file.read_text(encoding='utf-8') if args.file else args.instruction
-        result = run_project(home, args.project, instruction)
+        result = run_project(home, args.project, instruction, role=args.role, access=args.access, target=args.target, model=args.model, reasoning_effort=args.reasoning_effort)
         emit(result, args.json)
         return 0
     if args.command == 'smoke':
         instruction = 'PMBridge end-to-end smoke test only. Do not modify files or git state. Reply exactly: PMBRIDGE_SMOKE_OK'
-        result = run_project(home, args.project, instruction)
+        result = run_project(home, args.project, instruction, role='smoke', access='read', model=executor.DEFAULT_MODEL, reasoning_effort=executor.DEFAULT_REASONING_EFFORT)
         result['expected_result'] = 'PMBRIDGE_SMOKE_OK'
         emit(result, args.json)
         return 0
@@ -162,6 +208,23 @@ def main(argv=None):
         return 0 if result['ok'] else 4
     if args.command == 'recovery':
         result = recovery.scan(home)
+        try:
+            result['events'] = events.drain(home, wait_seconds=15.0, quiet_focused_seconds=12.0, quiet_background_seconds=4.0)
+        except Exception as exc:
+            result['events'] = {'status':'ERROR','error':type(exc).__name__}
+        emit(result, args.json)
+        return 0
+    if args.command == 'drain':
+        result = events.drain(home, wait_seconds=args.wait_seconds, quiet_focused_seconds=args.quiet_focused_seconds, quiet_background_seconds=args.quiet_background_seconds)
+        emit(result, args.json)
+        return 0
+    if args.command == 'pm':
+        if args.pm_command == 'busy': result = pm_state.set_busy(home, reason=args.reason, minutes=args.minutes)
+        elif args.pm_command == 'idle':
+            result = pm_state.set_idle(home)
+            try: spawn_event_drain(home)
+            except FileNotFoundError: pass
+        else: result = pm_state.status(home)
         emit(result, args.json)
         return 0
     if args.command == 'watch':

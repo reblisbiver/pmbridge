@@ -1,3 +1,5 @@
+import base64
+import json
 import os
 import subprocess
 import time
@@ -65,8 +67,6 @@ end tell'''
 
 
 def find_chat_by_texts(markers, attempts: int = 1, delay: float = 0.25, timeout: float = 2.0) -> dict:
-    import base64
-    import json
     markers = [str(x).strip() for x in markers if str(x).strip()]
     if not markers:
         return {'status': 'NEEDS_CHAT_BINDING'}
@@ -119,3 +119,33 @@ end run'''
 
 def find_chat_by_token(token: str, attempts: int = 1, delay: float = 0.25) -> dict:
     return find_chat_by_texts([token], attempts=attempts, delay=delay)
+
+
+def ui_state(chat_url: str, timeout: float = 4.0) -> dict:
+    script = r'''on run argv
+  set targetURL to item 1 of argv
+  tell application "Microsoft Edge"
+    repeat with w in windows
+      repeat with t in tabs of w
+        if URL of t is targetURL then
+          try
+            set js to "(()=>{const c=document.querySelector('[contenteditable=\\\"true\\\"][role=\\\"textbox\\\"]');const composer=(c?.innerText||'').trim();const stop=[...document.querySelectorAll('button')].some(b=>{const a=(b.getAttribute('aria-label')||'').trim();return a==='Stop'||/^Stop (generating|streaming|responding)$/i.test(a)||b.dataset?.testid==='stop-button'});const main=document.querySelector('main');const tail=(main?.innerText||document.body.innerText||'').slice(-500);const signature=[tail,composer,stop?'1':'0'].join('|');return JSON.stringify({reachable:true,composer_nonempty:!!composer,generating:stop,signature,visibility:document.visibilityState,focused:document.hasFocus()});})()"
+            return execute t javascript js
+          on error errMsg
+            return "{\"reachable\":false,\"reason\":\"js_error\"}"
+          end try
+        end if
+      end repeat
+    end repeat
+  end tell
+  return "{\"reachable\":false,\"reason\":\"tab_missing\"}"
+end run'''
+    try:
+        proc = subprocess.run(['osascript', '-', chat_url], input=script, text=True, capture_output=True, check=False, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return {'reachable': False, 'reason': 'timeout'}
+    text = (proc.stdout or '').strip()
+    try:
+        return json.loads(text)
+    except Exception:
+        return {'reachable': False, 'reason': 'invalid_probe'}

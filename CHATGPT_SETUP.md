@@ -35,7 +35,7 @@ Ask the user whether to create a new local Git repository for that project. Only
 python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-bind-text "<recent distinctive user text>" --chat-bind-text "<another recent distinctive user text>" --init-repo --json
 ```
 
-### If status is `NEEDS_CHAT_URL`
+### If chat binding fails
 
 Automatic binding of the current Edge ChatGPT conversation failed. First retry with two distinctive recent user-message fragments from the current conversation. If binding still fails, ask the user to provide/confirm the exact current ChatGPT conversation URL, then rerun with:
 
@@ -67,13 +67,43 @@ PM_JOB_STATUS <job_id> completed
 
 Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The expected smoke result is `PMBRIDGE_SMOKE_OK`. Do not infer success from the callback alone.
 
-5. For approved future Codex work, dispatch only through:
+5. For approved future Codex work, choose the execution policy **per job** and dispatch only through PMBridge. Access is never fixed at project level.
 
 ```bash
-~/.pmbridge/bin/pmbridge run <project-name> --file <task-file> --json
+~/.pmbridge/bin/pmbridge run <project-name> \
+  --role <free-form-role> \
+  --access read|write \
+  --target <optional-commit-or-version> \
+  --model gpt-5.6-luna \
+  --reasoning-effort xhigh \
+  --file <task-file> \
+  --json
 ```
 
+`--access` is required so the PM makes the read/write decision explicitly for each job. Multiple jobs may run concurrently. One-writer/many-readers is a recommended QA topology, not a framework restriction.
+
+Unless there is a deliberate reason to override them, use the explicit defaults `gpt-5.6-luna` and `xhigh`. PMBridge always passes both values to Codex; never rely on the user's current Codex UI/config selection.
+
 On callback, independently inspect local git state, diff, tests, job log/result, and artifacts. A completion callback is a **review trigger**, never permission to dispatch another task. Wait for explicit user approval before the next task.
+
+
+## PM interaction / callback queue
+
+Before beginning a substantial supervisor action that should not be interrupted by worker callbacks, mark the PM busy with a lease:
+
+```bash
+~/.pmbridge/bin/pmbridge pm busy --reason "<what the PM is doing>" --minutes 30 --json
+```
+
+When the PM is ready to receive worker reports again:
+
+```bash
+~/.pmbridge/bin/pmbridge pm idle --json
+```
+
+Worker callbacks are durable queued events. A single drain lock preserves FIFO order. Delivery is blocked while the PM is logically busy, ChatGPT is generating, the user has text in the composer, or the visible chat has not yet been quiet long enough. This prevents multiple workers from interrupting one another or the user's active exchange with the PM.
+
+Each event preserves `job_id`, `role`, optional `target`, project and status. On callback, load the matching job JSON; do not guess which worker returned.
 
 ## GitHub remote rule
 

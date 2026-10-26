@@ -11,10 +11,12 @@ This repository is optimized for personal reuse rather than broad compatibility.
 - bootstraps a project without silently creating a Git repository;
 - stores per-project config under `~/.pmbridge/projects/`;
 - installs a stable runtime under `~/.pmbridge/runtime/` and command at `~/.pmbridge/bin/pmbridge`;
-- launches Codex jobs with durable JSON state, logs, prompt and result files;
+- launches multiple concurrent Codex jobs with durable JSON state, logs, prompt and result files;
 - detects completion, failure, stalls and interrupted jobs;
 - periodically recovers lost watchers with a macOS LaunchAgent;
-- sends short status callbacks to the exact ChatGPT Web conversation without foreground tab switching;
+- queues concurrent worker callbacks and delivers them FIFO only when the PM/chat UI is idle;
+- lets the PM choose `read` or `write` access independently for every job;
+- explicitly pins every Codex job to `gpt-5.6-luna` + `xhigh` by default, with per-job overrides;
 - provides `doctor` and real no-op `smoke` checks.
 
 ## Fastest setup: let ChatGPT do it
@@ -46,15 +48,27 @@ Then:
 ~/.pmbridge/bin/pmbridge smoke <project> --json
 ```
 
+Example concurrent dispatches controlled by the PM:
+
+```bash
+~/.pmbridge/bin/pmbridge run <project> --role implementer --access write --file implement.md --json
+~/.pmbridge/bin/pmbridge run <project> --role qa --access read --target <commit> --file audit.md --json
+~/.pmbridge/bin/pmbridge run <project> --role blackbox --access read --target <commit> --file explore.md --json
+```
+
+These are conventions, not fixed roles. The PM can create any role names and choose access per job.
+
 ## Runtime commands
 
 ```text
 pmbridge bootstrap   Configure a project and install/update the stable runtime
 pmbridge doctor      Check project, Codex, Edge, ChatGPT tab and supervisor health
-pmbridge run         Launch an approved Codex task as a durable job
+pmbridge run         Launch an approved Codex task; requires per-job --access read|write
 pmbridge smoke       Launch a no-op end-to-end validation job
 pmbridge recovery    Scan/recover active jobs
-pmbridge notify      Return a short job status to the configured ChatGPT conversation
+pmbridge notify      Queue a short job status for the configured ChatGPT conversation
+pmbridge drain       Drain queued PM events when PM/UI are idle
+pmbridge pm          Set/read PM busy state
 pmbridge watch       Internal watcher command
 ```
 
