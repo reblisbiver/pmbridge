@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import config, events, state
+from . import config, events, executor, state
 
 ACTIVE = {'starting', 'running', 'stalled'}
 TERMINAL = {'completed', 'failed', 'interrupted'}
@@ -86,8 +86,8 @@ def handoff(home: Path, project: str, recent_limit: int = 8) -> dict:
             'updated_at': cfg.get('binding_updated_at'),
         },
         'execution_defaults': {
-            'model': cfg.get('default_model'),
-            'reasoning_effort': cfg.get('default_reasoning_effort'),
+            'model': cfg.get('default_model') or executor.DEFAULT_MODEL,
+            'reasoning_effort': cfg.get('default_reasoning_effort') or executor.DEFAULT_REASONING_EFFORT,
             'stall_seconds': cfg.get('stall_seconds'),
         },
         'active_jobs': active,
