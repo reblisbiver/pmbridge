@@ -24,9 +24,21 @@ def bootstrap(args):
         return repo_result
     repo = Path(repo_result['repo'])
     name = args.name or config.default_project_name(repo)
-    chat_url = transport_edge.current_chat_url() if args.chat_url == 'auto' else args.chat_url
-    if not chat_url:
-        return {'status': 'NEEDS_CHAT_URL', 'message': 'Could not discover the active ChatGPT conversation URL.'}
+    chat_url = None
+    if args.chat_url and args.chat_url != 'auto':
+        chat_url = args.chat_url
+    elif args.chat_bind_text:
+        binding = transport_edge.find_chat_by_texts(args.chat_bind_text, attempts=4, delay=0.25, timeout=2.0)
+        if binding.get('status') != 'FOUND':
+            return binding
+        chat_url = binding['url']
+    elif args.chat_bind_token:
+        binding = transport_edge.find_chat_by_token(args.chat_bind_token, attempts=4, delay=0.25)
+        if binding.get('status') != 'FOUND':
+            return binding
+        chat_url = binding['url']
+    else:
+        return {'status': 'NEEDS_CHAT_BINDING', 'message': 'Provide --chat-bind-text from recent user messages, --chat-bind-token, or an explicit --chat-url.'}
     cfg = {
         'version': 1,
         'name': name,
@@ -77,7 +89,9 @@ def build_parser():
 
     bp = sub.add_parser('bootstrap')
     bp.add_argument('--repo', required=True)
-    bp.add_argument('--chat-url', default='auto')
+    bp.add_argument('--chat-url')
+    bp.add_argument('--chat-bind-token')
+    bp.add_argument('--chat-bind-text', action='append')
     bp.add_argument('--name')
     bp.add_argument('--stall-seconds', type=int, default=1200)
     bp.add_argument('--init-repo', action='store_true')

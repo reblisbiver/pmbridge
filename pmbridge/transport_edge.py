@@ -1,5 +1,6 @@
 import os
 import subprocess
+import time
 from pathlib import Path
 
 SCRIPT = Path(__file__).with_name('edge_notify.sh')
@@ -61,3 +62,60 @@ end tell'''
     if url.startswith('https://chatgpt.com/c/'):
         return url
     return None
+
+
+def find_chat_by_texts(markers, attempts: int = 1, delay: float = 0.25, timeout: float = 2.0) -> dict:
+    import base64
+    import json
+    markers = [str(x).strip() for x in markers if str(x).strip()]
+    if not markers:
+        return {'status': 'NEEDS_CHAT_BINDING'}
+    payload_b64 = base64.b64encode(json.dumps(markers, ensure_ascii=False).encode('utf-8')).decode('ascii')
+    script = r'''on run argv
+  set payloadB64 to item 1 of argv
+  set matches to {}
+  tell application "Microsoft Edge"
+    repeat with w in windows
+      repeat with t in tabs of w
+        set u to URL of t
+        if u starts with "https://chatgpt.com/c/" then
+          try
+            set js to "(()=>{const xs=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" & payloadB64 & "'),c=>c.charCodeAt(0))));const body=(document.body&&document.body.innerText)||'';return xs.every(x=>body.includes(x))?'MATCH':'NO';})()"
+            set r to execute t javascript js
+            if r is "MATCH" then set end of matches to u
+          end try
+        end if
+      end repeat
+    end repeat
+  end tell
+  set AppleScript's text item delimiters to linefeed
+  return matches as text
+end run'''
+    last = {'status': 'CHAT_BINDING_NOT_FOUND'}
+    total = max(1, attempts)
+    for attempt in range(total):
+        try:
+            proc = subprocess.run(
+                ['osascript', '-', payload_b64], input=script, text=True,
+                capture_output=True, check=False, timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            last = {'status': 'CHAT_BINDING_TIMEOUT'}
+        else:
+            if proc.returncode != 0:
+                last = {'status': 'CHAT_BINDING_ERROR', 'error': (proc.stderr or proc.stdout or '').strip()}
+            else:
+                urls = [line.strip() for line in (proc.stdout or '').splitlines() if line.strip()]
+                urls = list(dict.fromkeys(urls))
+                if len(urls) == 1:
+                    return {'status': 'FOUND', 'url': urls[0]}
+                if len(urls) > 1:
+                    return {'status': 'AMBIGUOUS_CHAT_BINDING', 'matches': urls}
+                last = {'status': 'CHAT_BINDING_NOT_FOUND'}
+        if attempt < total - 1:
+            time.sleep(delay)
+    return last
+
+
+def find_chat_by_token(token: str, attempts: int = 1, delay: float = 0.25) -> dict:
+    return find_chat_by_texts([token], attempts=attempts, delay=delay)

@@ -30,13 +30,13 @@ The protocol requires ChatGPT to ask before running `git init` when the target i
 From this repository:
 
 ```bash
-python3 -m pmbridge.cli bootstrap --repo /path/to/project --chat-url auto --json
+python3 -m pmbridge.cli bootstrap --repo /path/to/project --chat-bind-text "<recent user text>" --chat-bind-text "<another recent user text>" --json
 ```
 
 If the result is `NEEDS_REPO_CONFIRMATION`, initialize only after deciding explicitly:
 
 ```bash
-python3 -m pmbridge.cli bootstrap --repo /path/to/project --chat-url auto --init-repo --json
+python3 -m pmbridge.cli bootstrap --repo /path/to/project --chat-bind-text "<recent user text>" --chat-bind-text "<another recent user text>" --init-repo --json
 ```
 
 Then:

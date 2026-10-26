@@ -20,7 +20,7 @@ Connect the user's current project to PMBridge so this ChatGPT web conversation 
 2. From the PMBridge source checkout, run:
 
    ```bash
-   python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-url auto --json
+   python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-bind-text "<recent distinctive user text>" --chat-bind-text "<another recent distinctive user text>" --json
    ```
 
 3. Read the JSON status exactly.
@@ -32,12 +32,12 @@ The target directory is not inside a Git repository. Do **not** initialize Git a
 Ask the user whether to create a new local Git repository for that project. Only after explicit approval rerun:
 
 ```bash
-python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-url auto --init-repo --json
+python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-bind-text "<recent distinctive user text>" --chat-bind-text "<another recent distinctive user text>" --init-repo --json
 ```
 
 ### If status is `NEEDS_CHAT_URL`
 
-Automatic discovery of the current Edge ChatGPT conversation failed. Ask the user to provide/confirm the exact current ChatGPT conversation URL, then rerun with:
+Automatic binding of the current Edge ChatGPT conversation failed. First retry with two distinctive recent user-message fragments from the current conversation. If binding still fails, ask the user to provide/confirm the exact current ChatGPT conversation URL, then rerun with:
 
 ```bash
 python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-url "<exact-chat-url>" --json

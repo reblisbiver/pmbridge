@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from pmbridge import transport_edge
 
@@ -51,3 +51,59 @@ class DiscoverChatTests(unittest.TestCase):
         run.return_value.stdout = 'https://chatgpt.com/\n'
         run.return_value.stderr = ''
         self.assertIsNone(transport_edge.current_chat_url())
+
+class TokenBindingTests(unittest.TestCase):
+    @patch('pmbridge.transport_edge.subprocess.run')
+    def test_find_chat_by_token_returns_unique_match(self, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = 'https://chatgpt.com/c/current\n'
+        run.return_value.stderr = ''
+        result = transport_edge.find_chat_by_token('PMBRIDGE_BIND_X')
+        self.assertEqual(result, {'status': 'FOUND', 'url': 'https://chatgpt.com/c/current'})
+
+    @patch('pmbridge.transport_edge.subprocess.run')
+    def test_find_chat_by_token_rejects_ambiguous_match(self, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = 'https://chatgpt.com/c/a\nhttps://chatgpt.com/c/b\n'
+        run.return_value.stderr = ''
+        result = transport_edge.find_chat_by_token('PMBRIDGE_BIND_X')
+        self.assertEqual(result['status'], 'AMBIGUOUS_CHAT_BINDING')
+
+    @patch('pmbridge.transport_edge.subprocess.run')
+    def test_find_chat_by_token_reports_missing(self, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = ''
+        run.return_value.stderr = ''
+        result = transport_edge.find_chat_by_token('PMBRIDGE_BIND_X')
+        self.assertEqual(result['status'], 'CHAT_BINDING_NOT_FOUND')
+
+class TokenBindingRetryTests(unittest.TestCase):
+    @patch('pmbridge.transport_edge.time.sleep')
+    @patch('pmbridge.transport_edge.subprocess.run')
+    def test_find_chat_by_token_can_wait_for_dom_render(self, run, sleep):
+        first = MagicMock(returncode=0, stdout='', stderr='')
+        second = MagicMock(returncode=0, stdout='https://chatgpt.com/c/current\n', stderr='')
+        run.side_effect = [first, second]
+        result = transport_edge.find_chat_by_token('PMBRIDGE_BIND_X', attempts=2, delay=0.1)
+        self.assertEqual(result['status'], 'FOUND')
+        sleep.assert_called_once_with(0.1)
+
+class TextBindingTests(unittest.TestCase):
+    @patch('pmbridge.transport_edge.subprocess.run')
+    def test_find_chat_by_texts_returns_unique_match(self, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = 'https://chatgpt.com/c/current\n'
+        run.return_value.stderr = ''
+        result = transport_edge.find_chat_by_texts(['distinctive setup request', 'start now'])
+        self.assertEqual(result, {'status': 'FOUND', 'url': 'https://chatgpt.com/c/current'})
+
+    @patch('pmbridge.transport_edge.subprocess.run')
+    def test_find_chat_by_texts_rejects_ambiguous_match(self, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = 'https://chatgpt.com/c/a\nhttps://chatgpt.com/c/b\n'
+        run.return_value.stderr = ''
+        result = transport_edge.find_chat_by_texts(['same text'])
+        self.assertEqual(result['status'], 'AMBIGUOUS_CHAT_BINDING')
+
+    def test_find_chat_by_texts_requires_nonempty_markers(self):
+        self.assertEqual(transport_edge.find_chat_by_texts([])['status'], 'NEEDS_CHAT_BINDING')
