@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from pmbridge import doctor
+from pmbridge import codex_profiles, doctor
 
 
 class DoctorTests(unittest.TestCase):
@@ -18,7 +18,8 @@ class DoctorTests(unittest.TestCase):
             (home/'projects'/'demo').mkdir(parents=True)
             (home/'projects'/'demo'/'config.json').write_text('{"version":1,"name":"demo","repo":"'+str(repo)+'","chat_url":"https://chatgpt.com/c/demo","stall_seconds":1200}')
             (home/'bin').mkdir(parents=True); (home/'bin'/'pmbridge').write_text('#!/bin/zsh\n')
-            result = doctor.check(home, 'demo', edge_exists=True, launchd_loaded=True)
+            codex_home = root/'.codex'; codex_profiles.install(codex_home)
+            result = doctor.check(home, 'demo', edge_exists=True, launchd_loaded=True, codex_home=codex_home)
             self.assertEqual(result['status'], 'READY')
             self.assertTrue(all(c['ok'] for c in result['checks']))
 

@@ -26,19 +26,22 @@ def create_job(
     stall_seconds: int = 1200,
     role: str = 'worker',
     access: str = 'write',
+    network: str = 'none',
     target=None,
     model: str = DEFAULT_MODEL,
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
 ) -> dict:
     if access not in {'read', 'write'}:
         raise ValueError(f'unsupported access mode: {access}')
+    if network not in {'none', 'local'}:
+        raise ValueError(f'unsupported network mode: {network}')
     job_id = str(uuid.uuid4())
     jobs_dir = home.expanduser() / 'jobs'
     jobs_dir.mkdir(parents=True, exist_ok=True)
     prompt = jobs_dir / f'{job_id}.prompt.txt'
     output = jobs_dir / f'{job_id}.log'
     result = jobs_dir / f'{job_id}.result.txt'
-    prompt.write_text(tag_instruction(job_id, instruction, role=role, access=access, target=target) + '\n', encoding='utf-8')
+    prompt.write_text(tag_instruction(job_id, instruction, role=role, access=access, target=target) + f'\n[NETWORK:{network}]\n', encoding='utf-8')
     output.touch()
     now = time.time()
     job = {
@@ -47,6 +50,7 @@ def create_job(
         'project': project,
         'role': role,
         'access': access,
+        'network': network,
         'target': target,
         'model': model,
         'reasoning_effort': reasoning_effort,

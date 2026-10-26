@@ -2,7 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from . import config, executor, transport_edge
+from . import codex_profiles, config, executor, transport_edge
 
 EDGE_APP = Path('/Applications/Microsoft Edge.app')
 
@@ -15,7 +15,7 @@ def supervisor_loaded() -> bool:
     return proc.returncode == 0
 
 
-def check(home: Path, project: str, edge_exists=None, launchd_loaded=None) -> dict:
+def check(home: Path, project: str, edge_exists=None, launchd_loaded=None, codex_home=None) -> dict:
     home = home.expanduser()
     checks = []
     try:
@@ -30,6 +30,10 @@ def check(home: Path, project: str, edge_exists=None, launchd_loaded=None) -> di
         checks.append({'name': 'codex', 'ok': True, 'detail': str(codex)})
     except Exception as exc:
         checks.append({'name': 'codex', 'ok': False, 'detail': str(exc)})
+    codex_root = codex_profiles.codex_home(codex_home)
+    for profile in (codex_profiles.READ_LOCAL, codex_profiles.WRITE_LOCAL):
+        profile_path = codex_root / f'{profile}.config.toml'
+        checks.append({'name': f'codex_profile:{profile}', 'ok': profile_path.exists(), 'detail': str(profile_path)})
     edge_ok = EDGE_APP.exists() if edge_exists is None else edge_exists
     checks.append({'name': 'edge', 'ok': bool(edge_ok), 'detail': str(EDGE_APP)})
     probe = transport_edge.probe(cfg['chat_url'])

@@ -47,3 +47,9 @@ PMBridge supports multiple simultaneous Codex jobs. Concurrency policy is contro
 All Codex invocations explicitly pin their execution model. V0.1 defaults are `gpt-5.6-luna` with `xhigh` reasoning; per-job overrides are supported.
 
 Codex status callbacks enter a durable FIFO event queue. Events are delivered to ChatGPT only after the PM logical state and web UI are both idle. This prevents concurrent worker completions from interrupting the PM or the user's active interaction.
+
+### Per-job capability policy
+
+Filesystem and network capability are orthogonal PM decisions. `access` is `read` or `write`; `network` is `none` or `local`. `local` selects a namespaced Codex permission profile that allows only loopback hosts (`localhost`, `127.0.0.1`, `::1`) while retaining the requested filesystem policy. In particular, `read + local` must be able to exercise a host preview server without gaining write access to the project.
+
+Every Codex invocation explicitly passes the model and reasoning effort. Defaults are `gpt-5.6-luna` and `xhigh`; no bridge job may silently inherit a changed global/UI model setting.

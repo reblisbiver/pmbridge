@@ -69,7 +69,7 @@ def run_job(home: Path, job_id: str, poll_seconds: float = 2.0) -> int:
     prompt = Path(job['prompt_file'])
     result = Path(job['result_file'])
     threshold = float(job.get('stall_seconds', 1200))
-    cmd = executor.build_codex_command(Path(job['repo']), result, access=job.get('access','write'), model=job.get('model', executor.DEFAULT_MODEL), reasoning_effort=job.get('reasoning_effort', executor.DEFAULT_REASONING_EFFORT))
+    cmd = executor.build_codex_command(Path(job['repo']), result, access=job.get('access','write'), network=job.get('network','none'), model=job.get('model', executor.DEFAULT_MODEL), reasoning_effort=job.get('reasoning_effort', executor.DEFAULT_REASONING_EFFORT))
     with prompt.open('rb') as stdin_f, output.open('ab', buffering=0) as out_f:
         proc = subprocess.Popen(cmd, stdin=stdin_f, stdout=out_f, stderr=subprocess.STDOUT, start_new_session=True)
         state.safe_transition(path, status='running', pid=proc.pid, watcher_pid=os.getpid(), last_activity_at=time.time())

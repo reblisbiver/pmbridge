@@ -77,6 +77,7 @@ def run_project(
     instruction: str,
     role: str = 'worker',
     access: str = 'write',
+    network: str = 'none',
     target=None,
     model: str = executor.DEFAULT_MODEL,
     reasoning_effort: str = executor.DEFAULT_REASONING_EFFORT,
@@ -84,13 +85,13 @@ def run_project(
     cfg = config.load_project(home, project)
     job = jobs.create_job(
         home, project, Path(cfg['repo']), instruction, int(cfg.get('stall_seconds', 1200)),
-        role=role, access=access, target=target, model=model, reasoning_effort=reasoning_effort,
+        role=role, access=access, network=network, target=target, model=model, reasoning_effort=reasoning_effort,
     )
     proc = spawn_watcher(home, job['job_id'])
     state.safe_transition(home/'jobs'/f"{job['job_id']}.json", watcher_pid=proc.pid)
     return {
         'status': 'STARTED', 'project': project, 'job_id': job['job_id'], 'watcher_pid': proc.pid,
-        'role': role, 'access': access, 'target': target, 'model': model, 'reasoning_effort': reasoning_effort,
+        'role': role, 'access': access, 'network': network, 'target': target, 'model': model, 'reasoning_effort': reasoning_effort,
     }
 
 
@@ -138,6 +139,7 @@ def build_parser():
     group.add_argument('--file', type=Path)
     rp.add_argument('--role', default='worker')
     rp.add_argument('--access', choices=['read','write'], required=True)
+    rp.add_argument('--network', choices=['none','local'], default='none')
     rp.add_argument('--target')
     rp.add_argument('--model', default=executor.DEFAULT_MODEL)
     rp.add_argument('--reasoning-effort', default=executor.DEFAULT_REASONING_EFFORT)
@@ -193,12 +195,12 @@ def main(argv=None):
         return 0 if result['status'] == 'READY' else 3
     if args.command == 'run':
         instruction = args.file.read_text(encoding='utf-8') if args.file else args.instruction
-        result = run_project(home, args.project, instruction, role=args.role, access=args.access, target=args.target, model=args.model, reasoning_effort=args.reasoning_effort)
+        result = run_project(home, args.project, instruction, role=args.role, access=args.access, network=args.network, target=args.target, model=args.model, reasoning_effort=args.reasoning_effort)
         emit(result, args.json)
         return 0
     if args.command == 'smoke':
         instruction = 'PMBridge end-to-end smoke test only. Do not modify files or git state. Reply exactly: PMBRIDGE_SMOKE_OK'
-        result = run_project(home, args.project, instruction, role='smoke', access='read', model=executor.DEFAULT_MODEL, reasoning_effort=executor.DEFAULT_REASONING_EFFORT)
+        result = run_project(home, args.project, instruction, role='smoke', access='read', network='none', model=executor.DEFAULT_MODEL, reasoning_effort=executor.DEFAULT_REASONING_EFFORT)
         result['expected_result'] = 'PMBRIDGE_SMOKE_OK'
         emit(result, args.json)
         return 0

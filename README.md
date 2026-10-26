@@ -15,7 +15,7 @@ This repository is optimized for personal reuse rather than broad compatibility.
 - detects completion, failure, stalls and interrupted jobs;
 - periodically recovers lost watchers with a macOS LaunchAgent;
 - queues concurrent worker callbacks and delivers them FIFO only when the PM/chat UI is idle;
-- lets the PM choose `read` or `write` access independently for every job;
+- lets the PM choose filesystem access (`read`/`write`) and network access (`none`/`local`) independently for every job;
 - explicitly pins every Codex job to `gpt-5.6-luna` + `xhigh` by default, with per-job overrides;
 - provides `doctor` and real no-op `smoke` checks.
 
@@ -51,19 +51,19 @@ Then:
 Example concurrent dispatches controlled by the PM:
 
 ```bash
-~/.pmbridge/bin/pmbridge run <project> --role implementer --access write --file implement.md --json
-~/.pmbridge/bin/pmbridge run <project> --role qa --access read --target <commit> --file audit.md --json
-~/.pmbridge/bin/pmbridge run <project> --role blackbox --access read --target <commit> --file explore.md --json
+~/.pmbridge/bin/pmbridge run <project> --role implementer --access write --network none --file implement.md --json
+~/.pmbridge/bin/pmbridge run <project> --role qa --access read --network none --target <commit> --file audit.md --json
+~/.pmbridge/bin/pmbridge run <project> --role blackbox --access read --network local --target <commit> --file explore.md --json
 ```
 
-These are conventions, not fixed roles. The PM can create any role names and choose access per job.
+These are conventions, not fixed roles. The PM can create any role names and choose access per job. `--network local` allows only loopback targets (`localhost`, `127.0.0.1`, `::1`) while preserving the selected filesystem access. This is intended for local preview servers and browser/black-box testing.
 
 ## Runtime commands
 
 ```text
 pmbridge bootstrap   Configure a project and install/update the stable runtime
 pmbridge doctor      Check project, Codex, Edge, ChatGPT tab and supervisor health
-pmbridge run         Launch an approved Codex task; requires per-job --access read|write
+pmbridge run         Launch an approved Codex task; requires --access read|write and supports --network none|local
 pmbridge smoke       Launch a no-op end-to-end validation job
 pmbridge recovery    Scan/recover active jobs
 pmbridge notify      Queue a short job status for the configured ChatGPT conversation
@@ -93,3 +93,7 @@ Do not commit runtime state, ChatGPT conversation URLs, job prompts/results or l
 ## Existing legacy bridges
 
 Existing project-specific bridges can remain independent. PMBridge does not require migrating them.
+
+## Codex permission profiles
+
+Bootstrap installs namespaced Codex profiles `pmbridge-read-local` and `pmbridge-write-local` under `$CODEX_HOME` (normally `~/.codex`). They are selected explicitly only for jobs using `--network local`. The read-local profile keeps the filesystem read-only while permitting full HTTP methods only to loopback hosts; it does not grant general internet access.

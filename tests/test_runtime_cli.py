@@ -11,12 +11,14 @@ class RuntimeTests(unittest.TestCase):
     def test_install_runtime_creates_stable_wrapper_and_package_copy(self):
         with tempfile.TemporaryDirectory() as td:
             home = Path(td)/'.pmbridge'
-            result = runtime.install(home)
+            result = runtime.install(home, codex_home=Path(td)/'.codex')
             self.assertTrue((home/'runtime'/'pmbridge'/'cli.py').exists())
             wrapper = (home/'bin'/'pmbridge').read_text(encoding='utf-8')
             self.assertIn('PYTHONPATH', wrapper)
             self.assertIn('-m pmbridge.cli', wrapper)
             self.assertEqual(result['status'], 'READY')
+            self.assertTrue((Path(td)/'.codex'/'pmbridge-read-local.config.toml').exists())
+            self.assertTrue((Path(td)/'.codex'/'pmbridge-write-local.config.toml').exists())
 
 
 class CliTests(unittest.TestCase):

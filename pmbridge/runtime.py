@@ -2,8 +2,10 @@ import shutil
 import stat
 from pathlib import Path
 
+from . import codex_profiles
 
-def install(home: Path) -> dict:
+
+def install(home: Path, codex_home=None) -> dict:
     home = home.expanduser().resolve()
     source_pkg = Path(__file__).resolve().parent
     runtime_root = home / 'runtime'
@@ -27,4 +29,5 @@ def install(home: Path) -> dict:
         encoding='utf-8',
     )
     wrapper.chmod(0o755)
-    return {'status': 'READY', 'runtime': str(runtime_root), 'command': str(wrapper)}
+    profiles = codex_profiles.install(codex_home)
+    return {'status': 'READY', 'runtime': str(runtime_root), 'command': str(wrapper), 'codex_profiles': profiles}

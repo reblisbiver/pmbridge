@@ -30,10 +30,11 @@ class ExecutionPolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             job = jobs.create_job(
                 Path(td), 'demo', Path('/tmp/repo'), 'Audit it', 600,
-                role='qa', access='read', target='abc123',
+                role='qa', access='read', network='local', target='abc123',
                 model='gpt-5.6-luna', reasoning_effort='xhigh')
             self.assertEqual(job['role'], 'qa')
             self.assertEqual(job['access'], 'read')
+            self.assertEqual(job['network'], 'local')
             self.assertEqual(job['target'], 'abc123')
             self.assertEqual(job['model'], 'gpt-5.6-luna')
             self.assertEqual(job['reasoning_effort'], 'xhigh')
@@ -48,12 +49,12 @@ class ExecutionPolicyTests(unittest.TestCase):
             (home/'projects'/'demo'/'config.json').write_text(
                 '{"version":1,"name":"demo","repo":"'+str(repo)+'","chat_url":"https://chatgpt.com/c/demo","stall_seconds":1200}')
             a = cli.run_project(home, 'demo', 'Implement', role='implementer', access='write')
-            b = cli.run_project(home, 'demo', 'Audit', role='qa', access='read', target='commit-a')
+            b = cli.run_project(home, 'demo', 'Audit', role='qa', access='read', network='local', target='commit-a')
             self.assertNotEqual(a['job_id'], b['job_id'])
             ja = state.load_job(home/'jobs'/f"{a['job_id']}.json")
             jb = state.load_job(home/'jobs'/f"{b['job_id']}.json")
             self.assertEqual((ja['role'], ja['access']), ('implementer', 'write'))
-            self.assertEqual((jb['role'], jb['access'], jb['target']), ('qa', 'read', 'commit-a'))
+            self.assertEqual((jb['role'], jb['access'], jb['network'], jb['target']), ('qa', 'read', 'local', 'commit-a'))
 
 
 if __name__ == '__main__':

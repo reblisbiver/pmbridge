@@ -73,6 +73,7 @@ Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The 
 ~/.pmbridge/bin/pmbridge run <project-name> \
   --role <free-form-role> \
   --access read|write \
+  --network none|local \
   --target <optional-commit-or-version> \
   --model gpt-5.6-luna \
   --reasoning-effort xhigh \
@@ -80,7 +81,7 @@ Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The 
   --json
 ```
 
-`--access` is required so the PM makes the read/write decision explicitly for each job. Multiple jobs may run concurrently. One-writer/many-readers is a recommended QA topology, not a framework restriction.
+`--access` is required so the PM makes the filesystem read/write decision explicitly for each job. `--network` is independently chosen per job (`none` by default, `local` for loopback-only access). Multiple jobs may run concurrently. One-writer/many-readers is a recommended QA topology, not a framework restriction. For browser/black-box testing against a host preview server, prefer `--access read --network local`: the repo remains read-only while localhost is reachable.
 
 Unless there is a deliberate reason to override them, use the explicit defaults `gpt-5.6-luna` and `xhigh`. PMBridge always passes both values to Codex; never rely on the user's current Codex UI/config selection.
 
