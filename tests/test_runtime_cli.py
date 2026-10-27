@@ -47,6 +47,12 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result['watcher_pid'], 42)
             self.assertTrue((home/'jobs'/f"{result['job_id']}.json").exists())
 
+
+class OptionalAccessCliTests(unittest.TestCase):
+    def test_run_parser_allows_access_to_be_omitted(self):
+        args = cli.build_parser().parse_args(['run', 'demo', '--instruction', 'Do work'])
+        self.assertIsNone(args.access)
+
 if __name__ == '__main__':
     unittest.main()
 

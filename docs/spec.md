@@ -50,7 +50,7 @@ Codex status callbacks enter a durable FIFO event queue. Events are delivered to
 
 ### Per-job capability policy
 
-Filesystem and network capability are orthogonal PM decisions. `access` is `read` or `write`; `network` is `none` or `local`. `local` selects a namespaced Codex permission profile that allows only loopback hosts (`localhost`, `127.0.0.1`, `::1`) while retaining the requested filesystem policy. In particular, `read + local` must be able to exercise a host preview server without gaining write access to the project.
+Filesystem access is an optional PM override: `access` may be omitted, `read`, or `write`. When omitted, PMBridge must not inject a Codex sandbox/profile choice. `network` is `none` or `local`; `local` selects a namespaced Codex permission profile that allows only loopback hosts (`localhost`, `127.0.0.1`, `::1`) and therefore requires explicit `read` or `write` because that profile also defines filesystem policy. In particular, `read + local` must be able to exercise a host preview server without gaining write access to the project.
 
 Every Codex invocation explicitly passes the model and reasoning effort. Defaults are `gpt-5.6-luna` and `xhigh`; no bridge job may silently inherit a changed global/UI model setting.
 

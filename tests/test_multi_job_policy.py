@@ -33,6 +33,18 @@ class ExecutionPolicyTests(unittest.TestCase):
         self.assertIn('--approve-for-me', cmd)
         self.assertNotIn('-s', cmd)
 
+    def test_omitted_access_does_not_impose_sandbox_policy(self):
+        cmd = executor.build_codex_command(
+            Path('/tmp/repo'), Path('/tmp/result'), access=None, network='none', codex=Path('/tmp/codex'))
+        self.assertNotIn('-s', cmd)
+        self.assertNotIn('-p', cmd)
+        self.assertNotIn('--approve-for-me', cmd)
+
+    def test_local_network_requires_explicit_access(self):
+        with self.assertRaisesRegex(ValueError, 'network=local requires explicit access'):
+            executor.build_codex_command(
+                Path('/tmp/repo'), Path('/tmp/result'), access=None, network='local', codex=Path('/tmp/codex'))
+
     def test_job_records_role_access_target_model_and_reasoning(self):
         with tempfile.TemporaryDirectory() as td:
             job = jobs.create_job(

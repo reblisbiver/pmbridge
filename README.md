@@ -57,7 +57,7 @@ Example concurrent dispatches controlled by the PM:
 ~/.pmbridge/bin/pmbridge run <project> --role blackbox --access read --network local --target <commit> --file explore.md --json
 ```
 
-These are conventions, not fixed roles. The PM can create any role names and choose access per job. `--network local` allows only loopback targets (`localhost`, `127.0.0.1`, `::1`) while preserving the selected filesystem access. This is intended for local preview servers and browser/black-box testing.
+These are conventions, not fixed roles. The PM can create any role names. `--access read|write` is an optional override, not a required PMBridge policy: omit it when PMBridge should not impose a filesystem sandbox choice. Explicit `read` can block tasks that need to write local state or artifacts; PMBridge's watcher callback itself remains outside that Codex sandbox. `--network local` allows only loopback targets (`localhost`, `127.0.0.1`, `::1`) and requires explicit `--access` because the loopback profile also defines filesystem policy.
 
 ## Runtime commands
 
@@ -66,7 +66,7 @@ pmbridge bootstrap   Configure a project and install/update the stable runtime
 pmbridge doctor      Check project, Codex, Edge, ChatGPT tab and supervisor health
 pmbridge handoff     Show durable state for a replacement ChatGPT PM conversation
 pmbridge rebind      Move a project callback binding to a new ChatGPT conversation
-pmbridge run         Launch an approved Codex task; requires --access read|write and supports --network none|local
+pmbridge run         Launch a Codex task; --access read|write is optional, --network supports none|local
 pmbridge smoke       Launch a no-op end-to-end validation job
 pmbridge recovery    Scan/recover active jobs
 pmbridge notify      Queue a short job status for the configured ChatGPT conversation
