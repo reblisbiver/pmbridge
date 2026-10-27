@@ -272,7 +272,11 @@ def main(argv=None):
         emit(result, args.json)
         return 0
     if args.command == 'pm':
-        project, scope = _resolve_pm_project_scope(home, args.project)
+        try:
+            project, scope = _resolve_pm_project_scope(home, args.project)
+        except ValueError as exc:
+            emit({'status': 'NEEDS_PROJECT', 'error': str(exc)}, args.json)
+            return 6
         if args.pm_command == 'busy': result = pm_state.set_busy(home, scope=scope, reason=args.reason, minutes=args.minutes)
         elif args.pm_command == 'idle':
             result = pm_state.set_idle(home, scope=scope)

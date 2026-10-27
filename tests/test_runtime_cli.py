@@ -75,6 +75,24 @@ class PMCommandScopeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'requires <project>'):
                 cli._resolve_pm_project_scope(home)
 
+    def test_pm_status_without_project_fails_closed_cleanly_when_multiple_projects_exist(self):
+        import io
+        import json
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            for name in ['a','b']:
+                (home/'projects'/name).mkdir(parents=True)
+                (home/'projects'/name/'config.json').write_text(
+                    json.dumps({'version':1,'name':name,'repo':f'/tmp/{name}','chat_url':f'https://chatgpt.com/c/{name}'}))
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc = cli.main(['pm','status','--home',str(home),'--json'])
+            payload = json.loads(out.getvalue())
+            self.assertEqual(rc, 6)
+            self.assertEqual(payload['status'], 'NEEDS_PROJECT')
+            self.assertIn('requires <project>', payload['error'])
+
 if __name__ == '__main__':
     unittest.main()
 
