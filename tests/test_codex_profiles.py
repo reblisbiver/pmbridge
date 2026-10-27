@@ -34,6 +34,15 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(cmd[cmd.index('-p')+1], 'pmbridge-write-local')
         self.assertNotIn('-s', cmd)
 
+
+    def test_internet_profiles_allow_public_domains(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = codex_profiles.install(Path(td))
+            for key in ('read-internet','write-internet'):
+                text = Path(result[key]).read_text()
+                self.assertIn('mode = "full"', text)
+                self.assertIn('"*" = "allow"', text)
+
     def test_none_network_keeps_read_sandbox_and_write_auto_approval(self):
         read = executor.build_codex_command(Path('/tmp/repo'), Path('/tmp/result'), access='read', network='none', codex=Path('/tmp/codex'))
         write = executor.build_codex_command(Path('/tmp/repo'), Path('/tmp/result'), access='write', network='none', codex=Path('/tmp/codex'))

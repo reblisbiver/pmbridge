@@ -73,7 +73,7 @@ Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The 
 ~/.pmbridge/bin/pmbridge run <project-name> \
   --role <free-form-role> \
   [--access read|write] \
-  --network none|local \
+  [--network none|local|internet] \
   --target <optional-commit-or-version> \
   --model gpt-5.6-luna \
   --reasoning-effort xhigh \
@@ -81,7 +81,7 @@ Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The 
   --json
 ```
 
-`--access` is optional. If omitted, PMBridge does not add a Codex sandbox/profile override; the Codex invocation uses its own configured access behavior. Use `--access read` when the worker should be unable to modify the workspace, and `--access write` when it needs workspace writes. Be careful with `read`: although PMBridge's terminal callback is emitted by the watcher outside the Codex sandbox, a task that itself must write local state, artifacts, or bridge/sidecar files can be blocked by read-only access. `--network local` uses a loopback-only profile that also encodes filesystem policy, so it requires an explicit `--access read|write`. Multiple jobs may run concurrently. One-writer/many-readers is only a possible topology, not a framework rule.
+`--access` is optional. If omitted, PMBridge does not add a Codex sandbox/profile override; the Codex invocation uses its own configured access behavior. Use `--access read` when the worker should be unable to modify the workspace, and `--access write` when it needs workspace writes. Be careful with `read`: although PMBridge's terminal callback is emitted by the watcher outside the Codex sandbox, a task that itself must write local state, artifacts, or bridge/sidecar files can be blocked by read-only access. `--network` is optional. If omitted, PMBridge does not override Codex network policy. Use `none` to keep network disabled, `local` for loopback-only access, or `internet` for public outbound access. `local` and `internet` use named profiles that also encode filesystem policy, so either requires an explicit `--access read|write`. Multiple jobs may run concurrently. One-writer/many-readers is only a possible topology, not a framework rule.
 
 Unless there is a deliberate reason to override them, use the explicit defaults `gpt-5.6-luna` and `xhigh`. PMBridge always passes both values to Codex; never rely on the user's current Codex UI/config selection.
 

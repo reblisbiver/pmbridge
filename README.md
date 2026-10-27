@@ -15,7 +15,7 @@ This repository is optimized for personal reuse rather than broad compatibility.
 - detects completion, failure, stalls and interrupted jobs;
 - periodically recovers lost watchers with a macOS LaunchAgent;
 - queues concurrent worker callbacks and delivers them FIFO only when the PM/chat UI is idle;
-- lets the PM choose filesystem access (`read`/`write`) and network access (`none`/`local`) independently for every job;
+- lets the PM choose filesystem access (`read`/`write`) and optional network policy (`none`/`local`/`internet`) per job, while allowing omission to inherit Codex network policy;
 - explicitly pins every Codex job to `gpt-5.6-luna` + `xhigh` by default, with per-job overrides;
 - provides `doctor` and real no-op `smoke` checks.
 
@@ -52,12 +52,12 @@ Then:
 Example concurrent dispatches controlled by the PM:
 
 ```bash
-~/.pmbridge/bin/pmbridge run <project> --role implementer --access write --network none --file implement.md --json
+~/.pmbridge/bin/pmbridge run <project> --role implementer --access write --network internet --file implement.md --json
 ~/.pmbridge/bin/pmbridge run <project> --role qa --access read --network none --target <commit> --file audit.md --json
 ~/.pmbridge/bin/pmbridge run <project> --role blackbox --access read --network local --target <commit> --file explore.md --json
 ```
 
-These are conventions, not fixed roles. The PM can create any role names. `--access read|write` is an optional override, not a required PMBridge policy: omit it when PMBridge should not impose a filesystem sandbox choice. Explicit `read` can block tasks that need to write local state or artifacts; PMBridge's watcher callback itself remains outside that Codex sandbox. `--network local` allows only loopback targets (`localhost`, `127.0.0.1`, `::1`) and requires explicit `--access` because the loopback profile also defines filesystem policy.
+These are conventions, not fixed roles. The PM can create any role names. `--access read|write` is an optional override, not a required PMBridge policy: omit it when PMBridge should not impose a filesystem sandbox choice. Explicit `read` can block tasks that need to write local state or artifacts; PMBridge's watcher callback itself remains outside that Codex sandbox. `--network` is optional. Omit it to leave Codex network policy unchanged; use `none` to keep network disabled, `local` for loopback-only access, or `internet` for public outbound access. `local` and `internet` require explicit `--access` because named network profiles also define filesystem policy.
 
 ## Runtime commands
 
@@ -66,7 +66,7 @@ pmbridge bootstrap   Configure a project and install/update the stable runtime
 pmbridge doctor      Check project, Codex, Edge, ChatGPT tab and supervisor health
 pmbridge handoff     Show durable state for a replacement ChatGPT PM conversation
 pmbridge rebind      Move a project callback binding to a new ChatGPT conversation
-pmbridge run         Launch a Codex task; --access read|write is optional, --network supports none|local
+pmbridge run         Launch a Codex task; --access is optional; --network optionally supports none|local|internet
 pmbridge smoke       Launch a no-op end-to-end validation job
 pmbridge recovery    Scan/recover active jobs
 pmbridge notify      Queue a short job status for the configured ChatGPT conversation
@@ -99,7 +99,7 @@ Existing project-specific bridges can remain independent. PMBridge does not requ
 
 ## Codex permission profiles
 
-Bootstrap installs namespaced Codex profiles `pmbridge-read-local` and `pmbridge-write-local` under `$CODEX_HOME` (normally `~/.codex`). They are selected explicitly only for jobs using `--network local`. The read-local profile keeps the filesystem read-only while permitting full HTTP methods only to loopback hosts; it does not grant general internet access.
+Bootstrap installs namespaced local and internet Codex profiles under `$CODEX_HOME` (normally `~/.codex`). They are selected only when `--network local` or `--network internet` is explicit. Local profiles allow only loopback hosts; internet profiles explicitly allow public domains with `"*" = "allow"`. Omitting `--network` leaves Codex network policy untouched.
 
 
 ## Moving to a new ChatGPT conversation
