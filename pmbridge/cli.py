@@ -207,10 +207,22 @@ def build_parser():
 
     pp = sub.add_parser('pm')
     psub = pp.add_subparsers(dest='pm_command', required=True)
-    pb = psub.add_parser('busy'); pb.add_argument('--reason', default='supervisor_work'); pb.add_argument('--minutes', type=int, default=30); pb.add_argument('--home'); pb.add_argument('--json', action='store_true')
-    pi = psub.add_parser('idle'); pi.add_argument('--home'); pi.add_argument('--json', action='store_true')
-    ps = psub.add_parser('status'); ps.add_argument('--home'); ps.add_argument('--json', action='store_true')
+    pb = psub.add_parser('busy'); pb.add_argument('project', nargs='?'); pb.add_argument('--reason', default='supervisor_work'); pb.add_argument('--minutes', type=int, default=30); pb.add_argument('--home'); pb.add_argument('--json', action='store_true')
+    pi = psub.add_parser('idle'); pi.add_argument('project', nargs='?'); pi.add_argument('--home'); pi.add_argument('--json', action='store_true')
+    ps = psub.add_parser('status'); ps.add_argument('project', nargs='?'); ps.add_argument('--home'); ps.add_argument('--json', action='store_true')
     return ap
+
+
+def _resolve_pm_project_scope(home: Path, project=None):
+    if project:
+        cfg = config.load_project(home, project)
+        return project, cfg['chat_url']
+    configs = sorted((home.expanduser() / 'projects').glob('*/config.json'))
+    if len(configs) != 1:
+        raise ValueError('pm busy/idle/status requires <project> when multiple PMBridge projects are configured')
+    inferred = configs[0].parent.name
+    cfg = config.load_project(home, inferred)
+    return inferred, cfg['chat_url']
 
 
 def main(argv=None):
@@ -260,12 +272,13 @@ def main(argv=None):
         emit(result, args.json)
         return 0
     if args.command == 'pm':
-        if args.pm_command == 'busy': result = pm_state.set_busy(home, reason=args.reason, minutes=args.minutes)
+        project, scope = _resolve_pm_project_scope(home, args.project)
+        if args.pm_command == 'busy': result = pm_state.set_busy(home, scope=scope, reason=args.reason, minutes=args.minutes)
         elif args.pm_command == 'idle':
-            result = pm_state.set_idle(home)
+            result = pm_state.set_idle(home, scope=scope)
             try: spawn_event_drain(home)
             except FileNotFoundError: pass
-        else: result = pm_state.status(home)
+        else: result = pm_state.status(home, scope=scope)
         emit(result, args.json)
         return 0
     if args.command == 'watch':

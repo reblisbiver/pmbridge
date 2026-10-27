@@ -95,8 +95,8 @@ def drain(home: Path, wait_seconds: float = 0.0, poll_seconds: float = 0.75, qui
     lock.parent.mkdir(parents=True, exist_ok=True)
     deadline = time.monotonic() + max(0.0, wait_seconds)
     delivered_count = 0
-    last_signature = None
-    safe_since = None
+    last_signature_by_conversation = {}
+    safe_since_by_conversation = {}
     with lock.open('a+') as fh:
         try:
             fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -106,48 +106,75 @@ def drain(home: Path, wait_seconds: float = 0.0, poll_seconds: float = 0.75, qui
             paths = sorted(pending.glob('*.json'))
             if not paths:
                 return {'status': 'EMPTY', 'delivered': delivered_count, 'pending': 0}
-            if pm_state.is_busy(home):
-                safe_since = None
+            # The queue is globally ordered on disk, but only the oldest event
+            # for each chat is eligible to compete for delivery. This keeps a
+            # blocked chat from holding unrelated chats behind it while still
+            # preserving FIFO within every conversation.
+            heads = []
+            seen_conversations = set()
+            for path in paths:
+                try:
+                    event = json.loads(path.read_text(encoding='utf-8'))
+                    cfg = config.load_project(home, event['project'])
+                    chat_url = cfg.get('chat_url')
+                    conversation = ('chat', chat_url) if chat_url else ('project', event['project'])
+                except Exception:
+                    shutil.move(str(path), str(delivered / (path.stem + '.invalid.json')))
+                    continue
+                if conversation in seen_conversations:
+                    continue
+                seen_conversations.add(conversation)
+                heads.append((path, event, cfg, conversation))
+
+            if not heads:
+                continue
+
+            candidate = None
+            blocked_status = None
+            failed_conversations = set()
+            for path, event, cfg, conversation in heads:
+                if pm_state.is_busy(home, cfg['chat_url']):
+                    safe_since_by_conversation.pop(conversation, None)
+                    if blocked_status is None:
+                        blocked_status = 'PM_BUSY'
+                    continue
+                ui = transport_edge.ui_state(cfg['chat_url'])
+                if not ui.get('reachable') or ui.get('composer_nonempty') or ui.get('generating'):
+                    safe_since_by_conversation.pop(conversation, None)
+                    last_signature_by_conversation[conversation] = ui.get('signature')
+                    if blocked_status is None:
+                        blocked_status = 'UI_BUSY'
+                    continue
+                now = time.monotonic()
+                signature = ui.get('signature')
+                if signature != last_signature_by_conversation.get(conversation):
+                    last_signature_by_conversation[conversation] = signature
+                    safe_since_by_conversation[conversation] = now
+                if conversation not in safe_since_by_conversation:
+                    safe_since_by_conversation[conversation] = now
+                quiet = quiet_focused_seconds if (ui.get('focused') or ui.get('visibility') == 'visible') else quiet_background_seconds
+                if now - safe_since_by_conversation[conversation] < quiet:
+                    if blocked_status is None:
+                        blocked_status = 'UI_QUIET_WAIT'
+                    continue
+                result = transport_edge.send(cfg['chat_url'], _message(event), home)
+                if not result.get('ok'):
+                    failed_conversations.add(conversation)
+                    if blocked_status is None:
+                        blocked_status = 'DELIVERY_FAILED'
+                    continue
+                candidate = (path, event, cfg, conversation)
+                break
+
+            if candidate is None:
                 if time.monotonic() >= deadline:
-                    return {'status': 'PM_BUSY', 'delivered': delivered_count, 'pending': len(paths)}
+                    return {'status': blocked_status or 'UI_BUSY', 'delivered': delivered_count, 'pending': len(paths)}
                 time.sleep(poll_seconds)
                 continue
-            path = paths[0]
-            try:
-                event = json.loads(path.read_text(encoding='utf-8'))
-                cfg = config.load_project(home, event['project'])
-            except Exception:
-                shutil.move(str(path), str(delivered / (path.stem + '.invalid.json')))
-                continue
-            ui = transport_edge.ui_state(cfg['chat_url'])
-            if not ui.get('reachable') or ui.get('composer_nonempty') or ui.get('generating'):
-                safe_since = None
-                last_signature = ui.get('signature')
-                if time.monotonic() >= deadline:
-                    return {'status': 'UI_BUSY', 'delivered': delivered_count, 'pending': len(paths)}
-                time.sleep(poll_seconds)
-                continue
-            now = time.monotonic()
-            signature = ui.get('signature')
-            if signature != last_signature:
-                last_signature = signature
-                safe_since = now
-            if safe_since is None:
-                safe_since = now
-            quiet = quiet_focused_seconds if (ui.get('focused') or ui.get('visibility') == 'visible') else quiet_background_seconds
-            if now - safe_since < quiet:
-                if now >= deadline:
-                    return {'status': 'UI_QUIET_WAIT', 'delivered': delivered_count, 'pending': len(paths)}
-                time.sleep(poll_seconds)
-                continue
-            result = transport_edge.send(cfg['chat_url'], _message(event), home)
-            if not result.get('ok'):
-                if time.monotonic() >= deadline:
-                    return {'status': 'DELIVERY_FAILED', 'delivered': delivered_count, 'pending': len(paths)}
-                time.sleep(max(1.0, poll_seconds))
-                continue
+
+            path, event, cfg, conversation = candidate
             shutil.move(str(path), str(delivered / path.name))
             delivered_count += 1
-            last_signature = None
-            safe_since = None
+            last_signature_by_conversation.pop(conversation, None)
+            safe_since_by_conversation.pop(conversation, None)
             time.sleep(0.5)
