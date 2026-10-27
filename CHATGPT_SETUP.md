@@ -85,7 +85,7 @@ Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The 
 
 Unless there is a deliberate reason to override them, use the explicit defaults `gpt-5.6-luna` and `xhigh`. PMBridge always passes both values to Codex; never rely on the user's current Codex UI/config selection.
 
-On callback, independently inspect local git state, diff, tests, job log/result, and artifacts. A completion callback is a **review trigger**, never permission to dispatch another task. Wait for explicit user approval before the next task.
+On callback, independently inspect local git state, diff, tests, job log/result, and artifacts. A completion callback is a **review trigger**, not by itself a decision about whether another task should be dispatched. Whether to continue, stop, or ask the user is determined by the PM from the user’s instructions and authorization in the current conversation. PMBridge does not impose a job-by-job, stage-by-stage, or other approval cadence.
 
 
 ## PM interaction / callback queue
