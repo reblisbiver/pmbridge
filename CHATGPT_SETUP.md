@@ -17,7 +17,7 @@ Connect the user's current project to PMBridge so this ChatGPT web conversation 
 ## Setup procedure
 
 1. Identify the target project directory from the user's request/current local context.
-2. From the PMBridge source checkout, run:
+2. Choose one or two distinctive excerpts from the **user's recent messages in this exact ChatGPT conversation**. Do not use assistant-written text, conversation titles, generic project names, or broad keywords. PMBridge only searches user-message containers and refuses ambiguous/no-match bindings. Then run:
 
    ```bash
    python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-bind-text "<recent distinctive user text>" --chat-bind-text "<another recent distinctive user text>" --json

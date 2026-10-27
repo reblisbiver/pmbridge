@@ -80,7 +80,7 @@ def find_chat_by_texts(markers, attempts: int = 1, delay: float = 0.25, timeout:
         set u to URL of t
         if u starts with "https://chatgpt.com/c/" then
           try
-            set js to "(()=>{const xs=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" & payloadB64 & "'),c=>c.charCodeAt(0))));const body=(document.body&&document.body.innerText)||'';return xs.every(x=>body.includes(x))?'MATCH':'NO';})()"
+            set js to "(()=>{const xs=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('" & payloadB64 & "'),c=>c.charCodeAt(0))));const nodes=[...document.querySelectorAll('[data-chatgpt-search-unit-key$=\\\":user\\\"],[data-content-search-unit-key$=\\\":user\\\"],[class*=\\\"user-message\\\"]')];const texts=[...new Set(nodes.map(n=>(n.innerText||'').trim()).filter(Boolean))];return xs.every(x=>texts.some(t=>t.includes(x)))?'MATCH':'NO';})()"
             set r to execute t javascript js
             if r is "MATCH" then set end of matches to u
           end try

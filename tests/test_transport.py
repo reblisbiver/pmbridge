@@ -89,6 +89,19 @@ class TokenBindingRetryTests(unittest.TestCase):
         sleep.assert_called_once_with(0.1)
 
 class TextBindingTests(unittest.TestCase):
+
+    @patch('pmbridge.transport_edge.subprocess.run')
+    def test_text_binding_scans_only_user_message_containers(self, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = ''
+        run.return_value.stderr = ''
+        transport_edge.find_chat_by_texts(['a distinctive user request'])
+        script = run.call_args.kwargs['input']
+        self.assertIn('data-chatgpt-search-unit-key', script)
+        self.assertIn('data-content-search-unit-key', script)
+        self.assertIn('user-message', script)
+        self.assertNotIn("document.body.innerText", script)
+
     @patch('pmbridge.transport_edge.subprocess.run')
     def test_find_chat_by_texts_returns_unique_match(self, run):
         run.return_value.returncode = 0

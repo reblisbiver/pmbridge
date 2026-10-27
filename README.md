@@ -26,6 +26,7 @@ Open `CHATGPT_SETUP.md` from this repository in the ChatGPT conversation that sh
 > Read this setup protocol and connect my current project to PMBridge.
 
 The protocol requires ChatGPT to ask before running `git init` when the target is not already a repository.
+Automatic chat binding is ownership-sensitive: markers are matched only inside ChatGPT user-message containers, never against the whole page or assistant replies. Use recent distinctive user text; ambiguous or missing ownership fails closed.
 
 ## Manual bootstrap
 
