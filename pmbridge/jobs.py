@@ -27,16 +27,16 @@ def create_job(
     stall_seconds: int = 1200,
     role: str = 'worker',
     access: str = None,
-    network: str = 'none',
+    network: str = None,
     target=None,
     model: str = DEFAULT_MODEL,
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
 ) -> dict:
     if access not in {None, 'read', 'write'}:
         raise ValueError(f'unsupported access mode: {access}')
-    if network == 'local' and access is None:
-        raise ValueError('network=local requires explicit access read|write because the local-network profile also defines filesystem policy')
-    if network not in {'none', 'local'}:
+    if network in {'local', 'internet'} and access is None:
+        raise ValueError(f'network={network} requires explicit access read|write because the network profile also defines filesystem policy')
+    if network not in {None, 'none', 'local', 'internet'}:
         raise ValueError(f'unsupported network mode: {network}')
     job_id = str(uuid.uuid4())
     jobs_dir = home.expanduser() / 'jobs'
@@ -44,7 +44,7 @@ def create_job(
     prompt = jobs_dir / f'{job_id}.prompt.txt'
     output = jobs_dir / f'{job_id}.log'
     result = jobs_dir / f'{job_id}.result.txt'
-    prompt.write_text(tag_instruction(job_id, instruction, role=role, access=access, target=target) + f'\n[NETWORK:{network}]\n', encoding='utf-8')
+    prompt.write_text(tag_instruction(job_id, instruction, role=role, access=access, target=target) + (f'\n[NETWORK:{network}]\n' if network is not None else '\n'), encoding='utf-8')
     output.touch()
     now = time.time()
     job = {

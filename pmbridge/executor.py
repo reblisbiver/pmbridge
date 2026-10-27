@@ -21,30 +21,30 @@ def build_codex_command(
     repo: Path,
     result_file: Path,
     access: str = None,
-    network: str = 'none',
+    network: str = None,
     model: str = DEFAULT_MODEL,
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
     codex: Path = None,
 ):
     if access not in {None, 'read', 'write'}:
         raise ValueError(f'unsupported access mode: {access}')
-    if network not in {'none', 'local'}:
+    if network not in {None, 'none', 'local', 'internet'}:
         raise ValueError(f'unsupported network mode: {network}')
-    if network == 'local' and access is None:
-        raise ValueError('network=local requires explicit access read|write because the local-network profile also defines filesystem policy')
+    if network in {'local', 'internet'} and access is None:
+        raise ValueError(f'network={network} requires explicit access read|write because the network profile also defines filesystem policy')
     binary = codex or find_codex()
     cmd = [
         str(binary), 'exec',
         '-m', model,
         '-c', f'model_reasoning_effort="{reasoning_effort}"',
     ]
-    profile = codex_profiles.profile_name(access, network) if network == 'local' else None
+    profile = codex_profiles.profile_name(access, network) if network in {'local', 'internet'} else None
     if profile:
         cmd += ['-p', profile]
     elif access == 'read':
         cmd += ['-s', 'read-only']
     cmd += ['-C', str(repo)]
-    if access == 'write' and network == 'none':
+    if access == 'write' and network in {None, 'none'}:
         cmd.append('--approve-for-me')
     cmd += ['-o', str(result_file), '-']
     return cmd

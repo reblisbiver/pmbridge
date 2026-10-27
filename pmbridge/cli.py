@@ -77,7 +77,7 @@ def run_project(
     instruction: str,
     role: str = 'worker',
     access: str = None,
-    network: str = 'none',
+    network: str = None,
     target=None,
     model: str = executor.DEFAULT_MODEL,
     reasoning_effort: str = executor.DEFAULT_REASONING_EFFORT,
@@ -158,7 +158,7 @@ def build_parser():
     group.add_argument('--file', type=Path)
     rp.add_argument('--role', default='worker')
     rp.add_argument('--access', choices=['read','write'])
-    rp.add_argument('--network', choices=['none','local'], default='none')
+    rp.add_argument('--network', choices=['none','local','internet'])
     rp.add_argument('--target')
     rp.add_argument('--model', default=executor.DEFAULT_MODEL)
     rp.add_argument('--reasoning-effort', default=executor.DEFAULT_REASONING_EFFORT)

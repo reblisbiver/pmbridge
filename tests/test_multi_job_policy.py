@@ -45,6 +45,18 @@ class ExecutionPolicyTests(unittest.TestCase):
             executor.build_codex_command(
                 Path('/tmp/repo'), Path('/tmp/result'), access=None, network='local', codex=Path('/tmp/codex'))
 
+
+    def test_omitted_network_does_not_impose_network_policy(self):
+        cmd = executor.build_codex_command(
+            Path('/tmp/repo'), Path('/tmp/result'), access=None, network=None, codex=Path('/tmp/codex'))
+        self.assertNotIn('-p', cmd)
+
+    def test_internet_network_uses_named_profile(self):
+        cmd = executor.build_codex_command(
+            Path('/tmp/repo'), Path('/tmp/result'), access='read', network='internet', codex=Path('/tmp/codex'))
+        self.assertIn('-p', cmd)
+        self.assertEqual(cmd[cmd.index('-p') + 1], 'pmbridge-read-internet')
+
     def test_job_records_role_access_target_model_and_reasoning(self):
         with tempfile.TemporaryDirectory() as td:
             job = jobs.create_job(
