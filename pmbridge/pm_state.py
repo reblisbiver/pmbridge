@@ -1,12 +1,14 @@
 import json
 import os
 import tempfile
+import hashlib
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 
-def _path(home: Path) -> Path:
-    return home.expanduser() / 'state' / 'pm_state.json'
+def _path(home: Path, scope: str) -> Path:
+    key = hashlib.sha256(scope.encode('utf-8')).hexdigest()
+    return home.expanduser() / 'state' / 'pm-state' / f'{key}.json'
 
 
 def _now():
@@ -17,15 +19,15 @@ def _iso(dt):
     return dt.isoformat(timespec='seconds')
 
 
-def load(home: Path) -> dict:
+def load(home: Path, scope: str) -> dict:
     try:
-        return json.loads(_path(home).read_text(encoding='utf-8'))
+        return json.loads(_path(home, scope).read_text(encoding='utf-8'))
     except Exception:
         return {'busy': False, 'reason': None, 'lease_until': None}
 
 
-def save(home: Path, data: dict) -> dict:
-    path = _path(home)
+def save(home: Path, scope: str, data: dict) -> dict:
+    path = _path(home, scope)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix='pm_state.', dir=path.parent)
     try:
@@ -41,8 +43,8 @@ def save(home: Path, data: dict) -> dict:
     return data
 
 
-def is_busy(home: Path) -> bool:
-    data = load(home)
+def is_busy(home: Path, scope: str) -> bool:
+    data = load(home, scope)
     if not data.get('busy'):
         return False
     lease = data.get('lease_until')
@@ -54,27 +56,28 @@ def is_busy(home: Path) -> bool:
         return False
 
 
-def set_busy(home: Path, reason='supervisor_work', minutes: int = 30) -> dict:
+def set_busy(home: Path, scope: str, reason='supervisor_work', minutes: int = 30) -> dict:
     now = _now()
     data = {
         'busy': True,
+        'scope': scope,
         'reason': reason,
         'updated_at': _iso(now),
         'lease_until': _iso(now + timedelta(minutes=minutes)),
     }
-    save(home, data)
+    save(home, scope, data)
     data['effective_busy'] = True
     return data
 
 
-def set_idle(home: Path) -> dict:
-    data = {'busy': False, 'reason': None, 'updated_at': _iso(_now()), 'lease_until': None}
-    save(home, data)
+def set_idle(home: Path, scope: str) -> dict:
+    data = {'busy': False, 'scope': scope, 'reason': None, 'updated_at': _iso(_now()), 'lease_until': None}
+    save(home, scope, data)
     data['effective_busy'] = False
     return data
 
 
-def status(home: Path) -> dict:
-    data = load(home)
-    data['effective_busy'] = is_busy(home)
+def status(home: Path, scope: str) -> dict:
+    data = load(home, scope)
+    data['effective_busy'] = is_busy(home, scope)
     return data

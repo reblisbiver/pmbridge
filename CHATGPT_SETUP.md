@@ -93,13 +93,13 @@ On callback, independently inspect local git state, diff, tests, job log/result,
 Before beginning a substantial supervisor action that should not be interrupted by worker callbacks, mark the PM busy with a lease:
 
 ```bash
-~/.pmbridge/bin/pmbridge pm busy --reason "<what the PM is doing>" --minutes 30 --json
+~/.pmbridge/bin/pmbridge pm busy <project-name> --reason "<what the PM is doing>" --minutes 30 --json
 ```
 
 When the PM is ready to receive worker reports again:
 
 ```bash
-~/.pmbridge/bin/pmbridge pm idle --json
+~/.pmbridge/bin/pmbridge pm idle <project-name> --json
 ```
 
 Worker callbacks are durable queued events. A single drain lock preserves FIFO order. Delivery is blocked while the PM is logically busy, ChatGPT is generating, the user has text in the composer, or the visible chat has not yet been quiet long enough. This prevents multiple workers from interrupting one another or the user's active exchange with the PM.

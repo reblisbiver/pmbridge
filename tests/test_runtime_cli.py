@@ -53,6 +53,28 @@ class OptionalAccessCliTests(unittest.TestCase):
         args = cli.build_parser().parse_args(['run', 'demo', '--instruction', 'Do work'])
         self.assertIsNone(args.access)
 
+
+class PMCommandScopeTests(unittest.TestCase):
+    def test_pm_busy_accepts_explicit_project_and_keeps_legacy_parse_compatible(self):
+        parser = cli.build_parser()
+        args = parser.parse_args(['pm', 'busy', 'demo', '--reason', 'review'])
+        self.assertEqual(args.project, 'demo')
+        legacy = parser.parse_args(['pm', 'busy', '--reason', 'review'])
+        self.assertIsNone(legacy.project)
+
+    def test_pm_scope_infers_only_single_project(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            (home/'projects'/'solo').mkdir(parents=True)
+            (home/'projects'/'solo'/'config.json').write_text(
+                '{"version":1,"name":"solo","repo":"/tmp/solo","chat_url":"https://chatgpt.com/c/solo"}')
+            self.assertEqual(cli._resolve_pm_project_scope(home), ('solo', 'https://chatgpt.com/c/solo'))
+            (home/'projects'/'other').mkdir(parents=True)
+            (home/'projects'/'other'/'config.json').write_text(
+                '{"version":1,"name":"other","repo":"/tmp/other","chat_url":"https://chatgpt.com/c/other"}')
+            with self.assertRaisesRegex(ValueError, 'requires <project>'):
+                cli._resolve_pm_project_scope(home)
+
 if __name__ == '__main__':
     unittest.main()
 
