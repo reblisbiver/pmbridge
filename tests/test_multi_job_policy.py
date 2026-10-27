@@ -14,6 +14,7 @@ class ExecutionPolicyTests(unittest.TestCase):
         self.assertIn('-c', cmd)
         self.assertIn('model_reasoning_effort="xhigh"', cmd)
         self.assertIn('--approve-for-me', cmd)
+        self.assertNotIn('-s', cmd)
 
     def test_read_access_is_real_codex_read_only_and_overrides_are_explicit(self):
         cmd = executor.build_codex_command(
@@ -25,6 +26,12 @@ class ExecutionPolicyTests(unittest.TestCase):
         self.assertIn('-s', cmd)
         self.assertEqual(cmd[cmd.index('-s') + 1], 'read-only')
         self.assertNotIn('--approve-for-me', cmd)
+
+    def test_write_without_network_uses_auto_approval_without_explicit_sandbox(self):
+        cmd = executor.build_codex_command(
+            Path('/tmp/repo'), Path('/tmp/result'), access='write', network='none', codex=Path('/tmp/codex'))
+        self.assertIn('--approve-for-me', cmd)
+        self.assertNotIn('-s', cmd)
 
     def test_job_records_role_access_target_model_and_reasoning(self):
         with tempfile.TemporaryDirectory() as td:

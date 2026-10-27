@@ -39,8 +39,8 @@ def build_codex_command(
     profile = codex_profiles.profile_name(access, network)
     if profile:
         cmd += ['-p', profile]
-    else:
-        cmd += ['-s', 'read-only' if access == 'read' else 'workspace-write']
+    elif access == 'read':
+        cmd += ['-s', 'read-only']
     cmd += ['-C', str(repo)]
     if access == 'write' and network == 'none':
         cmd.append('--approve-for-me')

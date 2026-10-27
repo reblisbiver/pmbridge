@@ -34,11 +34,11 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(cmd[cmd.index('-p')+1], 'pmbridge-write-local')
         self.assertNotIn('-s', cmd)
 
-    def test_none_network_keeps_existing_sandbox_modes(self):
+    def test_none_network_keeps_read_sandbox_and_write_auto_approval(self):
         read = executor.build_codex_command(Path('/tmp/repo'), Path('/tmp/result'), access='read', network='none', codex=Path('/tmp/codex'))
         write = executor.build_codex_command(Path('/tmp/repo'), Path('/tmp/result'), access='write', network='none', codex=Path('/tmp/codex'))
         self.assertEqual(read[read.index('-s')+1], 'read-only')
-        self.assertEqual(write[write.index('-s')+1], 'workspace-write')
+        self.assertNotIn('-s', write)
         self.assertIn('--approve-for-me', write)
 
 if __name__ == '__main__': unittest.main()
