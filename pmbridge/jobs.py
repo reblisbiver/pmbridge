@@ -6,12 +6,13 @@ from . import state
 from .executor import DEFAULT_MODEL, DEFAULT_REASONING_EFFORT
 
 
-def tag_instruction(job_id: str, instruction: str, role: str = 'worker', access: str = 'write', target=None) -> str:
+def tag_instruction(job_id: str, instruction: str, role: str = 'worker', access: str = None, target=None) -> str:
     lines = [
         f'[PM_BRIDGE_TASK:{job_id}]',
         f'[PM_ROLE:{role}]',
-        f'[ACCESS:{access}]',
     ]
+    if access is not None:
+        lines.append(f'[ACCESS:{access}]')
     if target:
         lines.append(f'[TARGET:{target}]')
     lines.append(instruction.strip())
@@ -25,14 +26,16 @@ def create_job(
     instruction: str,
     stall_seconds: int = 1200,
     role: str = 'worker',
-    access: str = 'write',
+    access: str = None,
     network: str = 'none',
     target=None,
     model: str = DEFAULT_MODEL,
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
 ) -> dict:
-    if access not in {'read', 'write'}:
+    if access not in {None, 'read', 'write'}:
         raise ValueError(f'unsupported access mode: {access}')
+    if network == 'local' and access is None:
+        raise ValueError('network=local requires explicit access read|write because the local-network profile also defines filesystem policy')
     if network not in {'none', 'local'}:
         raise ValueError(f'unsupported network mode: {network}')
     job_id = str(uuid.uuid4())
