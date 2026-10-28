@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import evidence, executor, state
+from . import evidence, executor, recovery, state
 
 
 def classify_exit(code: int) -> str:
@@ -33,6 +33,18 @@ def attach_job(home: Path, job_id: str, poll_seconds: float = 2.0) -> int:
     state.safe_transition(path, watcher_pid=os.getpid())
     if not state.process_alive(pid):
         current = state.load_job(path)
+        action = recovery.recovery_action(current)
+        if action == 'notify':
+            if state.claim_flag(path, 'notified_terminal'):
+                notify(home, job_id, current['status'])
+            return 0
+        if action == 'complete':
+            result = Path(current['result_file'])
+            finished_at = result.stat().st_mtime if result.exists() else time.time()
+            state.safe_transition(path, status='completed', finished_at=finished_at)
+            if state.claim_flag(path, 'notified_terminal'):
+                notify(home, job_id, 'completed')
+            return 0
         if current.get('status') in state.TERMINAL:
             return 0
         state.safe_transition(path, status='interrupted', end_head=evidence.capture_head(Path(job['repo'])))
