@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from . import binding, config, doctor, events, executor, gitops, jobs, launchd, pm_state, recovery, runtime, state, transport_edge, watcher
+from . import binding, config, context_pressure, doctor, events, evidence, executor, gitops, jobs, launchd, ledger, pm_state, recovery, runtime, state, transport_edge, watcher
 
 
 def emit(payload, as_json):
@@ -205,6 +205,27 @@ def build_parser():
     ho.add_argument('--home')
     ho.add_argument('--json', action='store_true')
 
+    ins = sub.add_parser('inspect')
+    ins.add_argument('job_id')
+    ins.add_argument('--full-result', action='store_true')
+    ins.add_argument('--home')
+    ins.add_argument('--json', action='store_true')
+
+    ctx = sub.add_parser('context')
+    ctx.add_argument('project')
+    ctx.add_argument('--home')
+    ctx.add_argument('--json', action='store_true')
+
+    lg = sub.add_parser('ledger')
+    lsub = lg.add_subparsers(dest='ledger_command', required=True)
+    ls = lsub.add_parser('show'); ls.add_argument('project'); ls.add_argument('--home'); ls.add_argument('--json', action='store_true')
+    for name in ('replace','patch'):
+        lp = lsub.add_parser(name); lp.add_argument('project')
+        source = lp.add_mutually_exclusive_group(required=True)
+        source.add_argument('--data')
+        source.add_argument('--file', type=Path)
+        lp.add_argument('--home'); lp.add_argument('--json', action='store_true')
+
     pp = sub.add_parser('pm')
     psub = pp.add_subparsers(dest='pm_command', required=True)
     pb = psub.add_parser('busy'); pb.add_argument('project', nargs='?'); pb.add_argument('--reason', default='supervisor_work'); pb.add_argument('--minutes', type=int, default=30); pb.add_argument('--home'); pb.add_argument('--json', action='store_true')
@@ -269,6 +290,29 @@ def main(argv=None):
         return 0 if result.get('status') == 'READY' else 5
     if args.command == 'handoff':
         result = binding.handoff(home, args.project)
+        emit(result, args.json)
+        return 0
+    if args.command == 'inspect':
+        result = evidence.inspect_job(home, args.job_id, full_result=args.full_result)
+        emit(result, args.json)
+        return 0
+    if args.command == 'context':
+        result = context_pressure.report(home, args.project)
+        emit(result, args.json)
+        return 0
+    if args.command == 'ledger':
+        if args.ledger_command == 'show':
+            loaded = ledger.load(home, args.project)
+            result = loaded if loaded is not None else {'status':'EMPTY','project':args.project,'data':None}
+        else:
+            raw = args.file.read_text(encoding='utf-8') if args.file else args.data
+            data = json.loads(raw)
+            if args.ledger_command == 'replace':
+                result = ledger.replace(home, args.project, data)
+            else:
+                if not isinstance(data, dict):
+                    raise ValueError('ledger patch --data/--file must contain a JSON object')
+                result = ledger.patch(home, args.project, data)
         emit(result, args.json)
         return 0
     if args.command == 'pm':

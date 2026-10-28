@@ -17,7 +17,9 @@ This repository is optimized for personal reuse rather than broad compatibility.
 - queues concurrent worker callbacks and delivers them FIFO only when the PM/chat UI is idle;
 - lets the PM choose filesystem access (`read`/`write`) and optional network policy (`none`/`local`/`internet`) per job, while allowing omission to inherit Codex network policy;
 - explicitly pins every Codex job to `gpt-5.6-luna` + `xhigh` by default, with per-job overrides;
-- provides `doctor` and real no-op `smoke` checks.
+- provides `doctor` and real no-op `smoke` checks;
+- exposes compact job evidence with raw evidence always available on demand;
+- stores an optional PM-controlled durable ledger and reports objective context-pressure metrics without forcing handoff or pruning.
 
 ## Fastest setup: let ChatGPT do it
 
@@ -65,6 +67,9 @@ These are conventions, not fixed roles. The PM can create any role names. `--acc
 pmbridge bootstrap   Configure a project and install/update the stable runtime
 pmbridge doctor      Check project, Codex, Edge, ChatGPT tab and supervisor health
 pmbridge handoff     Show durable state for a replacement ChatGPT PM conversation
+pmbridge inspect     Show a compact evidence packet for one job; --full-result expands the result text
+pmbridge ledger      Show/replace/patch PM-controlled durable project working state
+pmbridge context     Report objective context-pressure metrics for a project
 pmbridge rebind      Move a project callback binding to a new ChatGPT conversation
 pmbridge run         Launch a Codex task; --access is optional; --network optionally supports none|local|internet
 pmbridge smoke       Launch a no-op end-to-end validation job
@@ -84,6 +89,7 @@ PMBridge runtime data is deliberately outside project repositories:
 ├── bin/pmbridge
 ├── runtime/pmbridge/
 ├── projects/<name>/config.json
+├── projects/<name>/pm-ledger.json   # optional, PM-controlled
 ├── jobs/<job-id>.json
 ├── jobs/<job-id>.prompt.txt
 ├── jobs/<job-id>.log
@@ -92,6 +98,13 @@ PMBridge runtime data is deliberately outside project repositories:
 ```
 
 Do not commit runtime state, ChatGPT conversation URLs, job prompts/results or local paths into this public repository.
+
+
+## Context-efficient supervision
+
+A callback is a review trigger, not a requirement to ingest every byte of worker history. Start with `pmbridge inspect <job-id> --json` for deterministic job metadata, final-result preview, git boundaries/diffstat, and raw-evidence paths/sizes. Use `--full-result` or read the referenced raw log/result/artifacts whenever the task actually requires deeper evidence. PMBridge never forbids raw evidence access and never treats the compact packet as acceptance.
+
+`pmbridge ledger show|replace|patch <project>` stores arbitrary JSON chosen by the PM. PMBridge does not impose a ledger schema or decide which project facts should be retained. `pmbridge context <project> --json` reports counts and byte volumes since the current binding when that timestamp is known; it deliberately has no pressure threshold, automatic rotation, or policy recommendation.
 
 ## Existing legacy bridges
 

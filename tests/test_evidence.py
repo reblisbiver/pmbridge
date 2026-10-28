@@ -30,3 +30,13 @@ class EvidenceTests(unittest.TestCase):
             head=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()
             j=jobs.create_job(h,'p',repo,'x')
             self.assertEqual(j['start_head'],head)
+
+    def test_large_result_is_previewed_but_full_result_remains_available(self):
+        with tempfile.TemporaryDirectory() as td:
+            h=Path(td); (h/'jobs').mkdir(); repo=h/'repo'; repo.mkdir(); big='R'*20000
+            rp=h/'jobs/j.result.txt'; lp=h/'jobs/j.log'; rp.write_text(big); lp.write_text('log')
+            state.write_job(h/'jobs/j.json',{'job_id':'j','project':'p','status':'completed','repo':str(repo),'result_file':str(rp),'output_file':str(lp)})
+            compact=evidence.inspect_job(h,'j')
+            self.assertTrue(compact['result']['truncated']); self.assertLess(len(compact['result']['text']),len(big))
+            full=evidence.inspect_job(h,'j',full_result=True)
+            self.assertFalse(full['result']['truncated']); self.assertEqual(full['result']['text'],big)

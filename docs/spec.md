@@ -18,7 +18,7 @@ PMBridge is a private-reuse-first local bridge that lets a ChatGPT web conversat
 
 ## Runtime
 - A project config maps project name, repo root, ChatGPT conversation URL, Codex executable, and stall threshold.
-- Jobs are durable JSON records under `~/.pmbridge/jobs/` with prompt/output/result files.
+- Jobs are durable JSON records under `~/.pmbridge/jobs/` with prompt/output/result files and optional git start/end commit metadata.
 - A watcher launches Codex, owns the child process, tracks PID/status/activity/exit code, prevents terminal-state regression, and emits at-most-once state notifications.
 - A recovery scanner reattaches only when a live Codex process has no live watcher, and marks genuinely orphaned active jobs interrupted.
 - A launchd agent periodically runs recovery.
@@ -58,3 +58,12 @@ Every Codex invocation explicitly passes the model and reasoning effort. Default
 ## Chat conversation handoff
 
 A project binding is durable and replaceable. `rebind` changes only the single active ChatGPT callback destination and increments a binding version; active jobs, watcher PIDs and pending events are not restarted or rewritten. Previous bindings are kept in local runtime history. `handoff` returns a structured summary of project binding, active/recent jobs, pending events and execution defaults without exposing prompt/result contents.
+
+
+## Context-pressure support
+
+PMBridge provides progressive disclosure rather than evidence restriction. `inspect <job-id>` returns deterministic compact metadata and an index of raw evidence; raw logs, full results, diffs, tests and artifacts remain available. The default compact view may preview large result text, but a full-result path/command remains available.
+
+A project may have an optional PM-controlled JSON ledger under `projects/<name>/pm-ledger.json`. PMBridge stores and versions the value but imposes no semantic schema and does not decide what the PM should remember or discard.
+
+`context <project>` reports objective workload proxies such as jobs, callbacks, raw-log bytes and result bytes for the current binding window when known. PMBridge MUST NOT use these metrics to automatically stop work, delete evidence, force a conversation handoff, prescribe review depth, or make acceptance/authorization decisions.

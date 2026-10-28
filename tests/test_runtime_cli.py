@@ -143,3 +143,34 @@ class RebindCliTests(unittest.TestCase):
         args = cli.build_parser().parse_args(['rebind','demo','--chat-bind-text','hello','--json'])
         result = cli.rebind_project(Path('/tmp/home'), args)
         self.assertEqual(result['status'],'AMBIGUOUS_CHAT_BINDING')
+
+class ContextCliTests(unittest.TestCase):
+    def test_inspect_and_context_parsers(self):
+        p=cli.build_parser()
+        a=p.parse_args(['inspect','job-1','--full-result','--json'])
+        self.assertEqual(a.job_id,'job-1'); self.assertTrue(a.full_result)
+        c=p.parse_args(['context','demo','--json'])
+        self.assertEqual(c.project,'demo')
+
+    def test_ledger_parsers_accept_json_data(self):
+        p=cli.build_parser()
+        show=p.parse_args(['ledger','show','demo','--json'])
+        self.assertEqual(show.ledger_command,'show')
+        rep=p.parse_args(['ledger','replace','demo','--data','{"goal":"ship"}','--json'])
+        self.assertEqual(rep.data,'{"goal":"ship"}')
+        patch_args=p.parse_args(['ledger','patch','demo','--data','{"goal":"review"}','--json'])
+        self.assertEqual(patch_args.ledger_command,'patch')
+
+    def test_ledger_replace_and_show_main(self):
+        import io, json
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as td:
+            home=Path(td)
+            (home/'projects'/'demo').mkdir(parents=True)
+            (home/'projects'/'demo'/'config.json').write_text(json.dumps({'version':1,'name':'demo','repo':'/tmp/demo','chat_url':'https://chatgpt.com/c/demo'}))
+            out=io.StringIO()
+            with redirect_stdout(out): rc=cli.main(['ledger','replace','demo','--data','{"goal":"ship"}','--home',str(home),'--json'])
+            self.assertEqual(rc,0); self.assertEqual(json.loads(out.getvalue())['data']['goal'],'ship')
+            out=io.StringIO()
+            with redirect_stdout(out): rc=cli.main(['ledger','show','demo','--home',str(home),'--json'])
+            self.assertEqual(json.loads(out.getvalue())['data']['goal'],'ship')
