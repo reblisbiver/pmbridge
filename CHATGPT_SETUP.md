@@ -85,7 +85,7 @@ Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The 
 
 Unless there is a deliberate reason to override them, use the explicit defaults `gpt-5.6-luna` and `xhigh`. PMBridge always passes both values to Codex; never rely on the user's current Codex UI/config selection.
 
-On callback, independently inspect local git state, diff, tests, job log/result, and artifacts. A completion callback is a **review trigger**, not by itself a decision about whether another task should be dispatched. Whether to continue, stop, or ask the user is determined by the PM from the user’s instructions and authorization in the current conversation. PMBridge does not impose a job-by-job, stage-by-stage, or other approval cadence.
+On callback, independently verify the material claims and target state. Start with `~/.pmbridge/bin/pmbridge inspect <job-id> --json`, which is a compact evidence index: job metadata, final-result preview, git boundaries/diffstat when available, and paths/sizes for raw evidence. Expand into the raw log, full result, diff, tests, artifacts, or other local state whenever they are material, uncertain, contradictory, or otherwise useful. Do not treat the compact packet or a completion callback as acceptance. PMBridge never forbids raw evidence access. Whether to continue, stop, ask the user, or how deeply to audit is determined by the PM from the task and current user authorization; PMBridge imposes no review depth, job-by-job/stage-by-stage approval cadence, context threshold, or automatic handoff.
 
 
 ## PM interaction / callback queue
@@ -104,7 +104,18 @@ When the PM is ready to receive worker reports again:
 
 Worker callbacks are durable queued events. A single drain lock preserves FIFO order. Delivery is blocked while the PM is logically busy, ChatGPT is generating, the user has text in the composer, or the visible chat has not yet been quiet long enough. This prevents multiple workers from interrupting one another or the user's active exchange with the PM.
 
-Each event preserves `job_id`, `role`, optional `target`, project and status. On callback, load the matching job JSON; do not guess which worker returned.
+Each event preserves `job_id`, `role`, optional `target`, project and status. On callback, use the matching job id; do not guess which worker returned.
+
+For long-running projects, the PM may externalize its own current working state without changing execution semantics:
+
+```bash
+~/.pmbridge/bin/pmbridge ledger replace <project-name> --data '{"current_goal":"...","next":"..."}' --json
+~/.pmbridge/bin/pmbridge ledger patch <project-name> --data '{"next":"..."}' --json
+~/.pmbridge/bin/pmbridge ledger show <project-name> --json
+~/.pmbridge/bin/pmbridge context <project-name> --json
+```
+
+Ledger content is entirely PM-controlled; PMBridge does not define required keys or delete chat history. `context` is diagnostic only and does not force compaction, rotation, or handoff.
 
 ## GitHub remote rule
 

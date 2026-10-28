@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import executor, state
+from . import evidence, executor, state
 
 
 def classify_exit(code: int) -> str:
@@ -35,7 +35,7 @@ def attach_job(home: Path, job_id: str, poll_seconds: float = 2.0) -> int:
         current = state.load_job(path)
         if current.get('status') in state.TERMINAL:
             return 0
-        state.safe_transition(path, status='interrupted')
+        state.safe_transition(path, status='interrupted', end_head=evidence.capture_head(Path(job['repo'])))
         if state.claim_flag(path, 'notified_terminal'):
             notify(home, job_id, 'interrupted')
         return 4
@@ -55,7 +55,7 @@ def attach_job(home: Path, job_id: str, poll_seconds: float = 2.0) -> int:
     current = state.load_job(path)
     if current.get('status') in state.TERMINAL:
         return 0
-    state.safe_transition(path, status='interrupted')
+    state.safe_transition(path, status='interrupted', end_head=evidence.capture_head(Path(job['repo'])))
     if state.claim_flag(path, 'notified_terminal'):
         notify(home, job_id, 'interrupted')
     return 4
@@ -80,7 +80,7 @@ def run_job(home: Path, job_id: str, poll_seconds: float = 2.0) -> int:
             age = state.output_age_seconds(output)
             if code is not None:
                 status = classify_exit(code)
-                state.safe_transition(path, status=status, exit_code=code, finished_at=time.time(), watcher_pid=os.getpid())
+                state.safe_transition(path, status=status, exit_code=code, finished_at=time.time(), watcher_pid=os.getpid(), end_head=evidence.capture_head(Path(job['repo'])))
                 if state.claim_flag(path, 'notified_terminal'):
                     notify(home, job_id, status)
                 return 0 if code == 0 else 3

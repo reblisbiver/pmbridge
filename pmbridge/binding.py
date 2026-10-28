@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import config, events, executor, state
+from . import config, events, executor, ledger, state
 
 ACTIVE = {'starting', 'running', 'stalled'}
 TERMINAL = {'completed', 'failed', 'interrupted'}
@@ -93,4 +93,5 @@ def handoff(home: Path, project: str, recent_limit: int = 8) -> dict:
         'active_jobs': active,
         'recent_jobs': recent[:recent_limit],
         'pending_events': pending,
+        'ledger': ledger.load(home, project),
     }

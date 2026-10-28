@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 
 from . import state
+from . import evidence
 from .executor import DEFAULT_MODEL, DEFAULT_REASONING_EFFORT
 
 
@@ -71,6 +72,8 @@ def create_job(
         'exit_code': None,
         'notified_stalled': False,
         'notified_terminal': False,
+        'start_head': evidence.capture_head(repo),
+        'end_head': None,
     }
     state.write_job(jobs_dir / f'{job_id}.json', job)
     return job
