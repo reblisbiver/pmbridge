@@ -36,6 +36,7 @@ class RecoveryTests(unittest.TestCase):
     def test_completed_job_never_interrupts(self, alive):
         with tempfile.TemporaryDirectory() as td:
             p = self.job(td, status='completed')
+            state.update_job(p, notified_terminal=True)
             self.assertEqual(recovery.recovery_action(state.load_job(p)), 'none')
 
 
