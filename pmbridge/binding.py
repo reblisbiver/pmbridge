@@ -70,12 +70,24 @@ def _collect_jobs(home: Path, project: str, recent_limit: int = 8):
             if job.get('project') != project:
                 continue
             if job.get('status') in ACTIVE:
-                active.append(_job_summary(job))
+                active.append((_job_summary(job), _evidence_ref(job)))
             elif job.get('status') in TERMINAL:
-                recent.append(_job_summary(job))
-    active.sort(key=lambda x: x.get('started_at') or 0)
-    recent.sort(key=lambda x: x.get('finished_at') or x.get('started_at') or 0, reverse=True)
-    return active, recent[:recent_limit]
+                recent.append((_job_summary(job), _evidence_ref(job)))
+    active.sort(key=lambda x: x[0].get('started_at') or 0)
+    recent.sort(key=lambda x: x[0].get('finished_at') or x[0].get('started_at') or 0, reverse=True)
+    return (
+        [entry[0] for entry in active],
+        [entry[0] for entry in recent[:recent_limit]],
+        [entry[1] for entry in active] + [entry[1] for entry in recent[:recent_limit]],
+    )
+
+
+def _evidence_ref(job):
+    entry = {'job_id': job.get('job_id')}
+    for key in ('prompt_file', 'output_file', 'result_file'):
+        if job.get(key):
+            entry[key] = job[key]
+    return entry
 
 
 def takeover(home: Path, project: str, recent_limit: int = 8) -> dict:
@@ -86,7 +98,7 @@ def takeover(home: Path, project: str, recent_limit: int = 8) -> dict:
     """
     home = home.expanduser()
     cfg = config.load_project(home, project)
-    active, recent = _collect_jobs(home, project, recent_limit=recent_limit)
+    active, recent, evidence = _collect_jobs(home, project, recent_limit=recent_limit)
     pending = [e for e in events.pending_events(home, create=False) if e.get('project') == project]
     chat_url = cfg.get('chat_url')
     scope = chat_url or project
@@ -119,6 +131,7 @@ def takeover(home: Path, project: str, recent_limit: int = 8) -> dict:
             },
             'active_jobs': active,
             'recent_jobs': recent,
+            'evidence': evidence,
         },
         'runtime': {
             'binding': active_binding,

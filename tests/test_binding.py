@@ -81,6 +81,8 @@ class BindingTests(unittest.TestCase):
             self.assertEqual(snap['supervision']['charter']['path'], 'docs/pm-operating-charter.md')
             self.assertTrue(snap['supervision']['charter']['read_first'])
             self.assertEqual(snap['execution']['active_jobs'][0]['job_id'], 'a')
+            self.assertEqual(snap['execution']['evidence'][0]['job_id'], 'a')
+            self.assertEqual(snap['execution']['evidence'][0]['result_file'], str(result))
             self.assertEqual(snap['runtime']['binding']['url'], 'https://chatgpt.com/c/old')
             self.assertEqual(snap['runtime']['callbacks']['pending'][0]['job_id'], 'a')
             self.assertTrue(snap['runtime']['pm_state']['effective_busy'])
