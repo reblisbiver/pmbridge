@@ -40,11 +40,11 @@
 - `cli.run_project(..., binding_guard=None)` validates before creating a job.
 - `run` and `smoke` accept JSON `--binding-guard` input.
 
-- [ ] Write the stale-binding dispatch test first.
-- [ ] Run it and observe RED because the current dispatch surface has no guard gate.
-- [ ] Implement the smallest local guard model, bootstrap/rebind activation, takeover/rebind return fields, and dispatch gate.
-- [ ] Add matching, stale, rebind-invalidation, missing/legacy, malformed, and no-browser-read tests; run the focused suite GREEN.
-- [ ] Commit the guard implementation.
+- [x] Write the stale-binding dispatch test first.
+- [x] Run it and observe RED because the current dispatch surface has no guard gate.
+- [x] Implement the smallest local guard model, bootstrap/rebind activation, takeover/rebind return fields, and dispatch gate.
+- [x] Add matching, stale, rebind-invalidation, missing/legacy, malformed, and no-browser-read tests; run the focused suite GREEN.
+- [x] Commit the guard implementation.
 
 ### Task 2: Callback routing regression and setup migration
 
@@ -53,10 +53,10 @@
 - Modify: `README.md` if command reference needs alignment
 - Test: `tests/test_event_queue.py`, `tests/test_runtime_cli.py`
 
-- [ ] Write a pending-callback-after-rebind test and run it RED if current behavior differs.
-- [ ] Keep callback drain behavior unchanged and make the regression test GREEN.
-- [ ] Document that takeover/rebind output contains the guard and every guarded run must pass it; document legacy behavior exactly.
-- [ ] Commit the routing regression and migration docs.
+- [x] Write a pending-callback-after-rebind test and run it RED if current behavior differs.
+- [x] Keep callback drain behavior unchanged and make the regression test GREEN.
+- [x] Document that takeover/rebind output contains the guard and every guarded run must pass it; document legacy behavior exactly.
+- [x] Commit the routing regression and migration docs.
 
 ### Task 3: Runtime wrapper self-install protection
 
@@ -64,13 +64,13 @@
 - Modify: `pmbridge/runtime.py`
 - Test: `tests/test_runtime_cli.py`
 
-- [ ] Write a test that runs `runtime.install()` with source package equal to its installed target and observes the current self-delete failure.
-- [ ] Add only the path-equality guard around copy/remove, then run the test GREEN.
-- [ ] Commit the independently testable runtime fix.
+- [x] Write a test that runs `runtime.install()` with source package equal to its installed target and observes the current self-delete failure.
+- [x] Add only the path-equality guard around copy/remove, then run the test GREEN.
+- [x] Commit the independently testable runtime fix.
 
 ### Task 4: Final verification and clean handoff
 
-- [ ] Run focused tests, full pytest, `python3 -m compileall -q pmbridge compat`, and `git diff --check`.
-- [ ] Inspect the diff for scope, confirm `docs/bugfix-cross-project-drain.md` is untouched, and run a final status check.
-- [ ] Commit any directly necessary correction and rerun all completion checks.
+- [x] Run focused tests, full pytest, `python3 -m compileall -q pmbridge compat`, and `git diff --check`.
+- [x] Inspect the diff for scope, confirm `docs/bugfix-cross-project-drain.md` is untouched, and run a final status check.
+- [x] Commit any directly necessary correction and rerun all completion checks.
 
