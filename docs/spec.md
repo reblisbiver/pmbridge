@@ -1,7 +1,20 @@
-# PMBridge V0.1 Spec
+# PMBridge V0.1 / vNext Phase 1 Spec
 
 ## Goal
-PMBridge is a private-reuse-first local bridge that lets a ChatGPT web conversation supervise local Codex execution as durable jobs, with recovery and callback into the originating ChatGPT conversation.
+PMBridge is a private-reuse-first local capability layer that lets a high-autonomy ChatGPT PM supervise local Codex execution as durable jobs, with recovery, evidence, and callback into the active ChatGPT conversation. The PM may maintain context, apply project methods, catch mistakes, and correct conflicts with project facts or prior decisions.
+
+## Architectural layers
+
+PMBridge separates four conceptual layers without creating four independent state systems:
+
+1. **PM / Supervision** — the canonical PM operating charter and continuity guidance for the supervising PM.
+2. **Project** — project config and the optional PM-controlled arbitrary JSON ledger. The ledger may contain whatever project-specific goal, state, decision, focus, blocker, or methodology fields the PM needs.
+3. **Execution** — durable Codex jobs, worker roles, prompts, targets, skills/method choices carried by instructions, model/access/network settings, evidence, and results.
+4. **Transport & Runtime** — binding, callback queue, Edge delivery protection, watcher ownership, recovery, and busy/idle delivery state.
+
+`takeover` is the canonical read-only view across these layers. It composes existing config, ledger, job, evidence, event, binding, and PM-state sources. `handoff` remains a backwards-compatible read alias and must not become a separate state system.
+
+PMBridge provides capability/infrastructure. It does not prescribe PM policy, invent owner authorization, require a review cadence, force a job topology, limit evidence access, or automatically decide when to stop or hand off.
 
 ## Supported environment
 - macOS
@@ -38,7 +51,7 @@ PMBridge is a private-reuse-first local bridge that lets a ChatGPT web conversat
 - ChatGPT never creates a GitHub remote without a separate explicit user confirmation.
 
 ## Existing bridges
-Existing project-specific bridges remain independent legacy installations. This project does not migrate or alter their execution modes.
+Existing project-specific bridges remain independent legacy installations. Compatibility helpers may adapt their existing evidence and ledger sources into the four-layer read shape, but this project does not migrate their state or alter their execution modes.
 
 ## Concurrent PM orchestration
 
@@ -55,15 +68,15 @@ Filesystem access is an optional PM override: `access` may be omitted, `read`, o
 Every Codex invocation explicitly passes the model and reasoning effort. Defaults are `gpt-5.6-luna` and `xhigh`; no bridge job may silently inherit a changed global/UI model setting.
 
 
-## Chat conversation handoff
+## Chat conversation takeover
 
-A project binding is durable and replaceable. `rebind` changes only the single active ChatGPT callback destination and increments a binding version; active jobs, watcher PIDs and pending events are not restarted or rewritten. Previous bindings are kept in local runtime history. `handoff` returns a structured summary of project binding, active/recent jobs, pending events and execution defaults without exposing prompt/result contents.
+A project binding is durable and replaceable. `rebind` changes only the single active ChatGPT callback destination and increments a binding version; active jobs, watcher PIDs and pending events are not restarted or rewritten. Previous bindings are kept in local runtime history. `takeover` returns separate PM/Supervision, Project, Execution, and Transport & Runtime sections without exposing prompt/result contents. `handoff` preserves the older flat keys and derives them from the same takeover view.
 
 
-## Context-pressure support
+## Progressive read views and project metrics
 
 PMBridge provides progressive disclosure rather than evidence restriction. `inspect <job-id>` returns deterministic compact metadata and an index of raw evidence; raw logs, full results, diffs, tests and artifacts remain available. The default compact view may preview large result text, but a full-result path/command remains available.
 
 A project may have an optional PM-controlled JSON ledger under `projects/<name>/pm-ledger.json`. PMBridge stores and versions the value but imposes no semantic schema and does not decide what the PM should remember or discard.
 
-`context <project>` reports objective workload proxies such as jobs, callbacks, raw-log bytes and result bytes for the current binding window when known. PMBridge MUST NOT use these metrics to automatically stop work, delete evidence, force a conversation handoff, prescribe review depth, or make acceptance/authorization decisions.
+`context <project>` reports objective project metrics such as jobs, callbacks, raw-log bytes and result bytes for the current binding window when known. PMBridge MUST NOT use these metrics to automatically stop work, delete evidence, force a conversation takeover, prescribe review depth, or make acceptance/authorization decisions.

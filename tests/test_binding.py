@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pmbridge import binding, config, state
+from pmbridge import binding, config, ledger, pm_state, state
 
 
 class BindingTests(unittest.TestCase):
@@ -30,6 +30,33 @@ class BindingTests(unittest.TestCase):
             self.assertEqual(entry['previous_chat_url'],'https://chatgpt.com/c/old')
             self.assertEqual(entry['new_chat_url'],'https://chatgpt.com/c/new')
             self.assertEqual(out['binding_version'],2)
+            self.assertTrue(cfg['binding_guarded'])
+            self.assertEqual(out['binding_guard'], {
+                'project': 'demo',
+                'binding_version': 2,
+                'binding_session': cfg['binding_session'],
+            })
+            self.assertEqual(
+                binding.validate_guard(home, 'demo', out['binding_guard'])['status'],
+                'READY',
+            )
+            self.assertEqual(
+                binding.validate_guard(home, 'demo', {
+                    'project': 'demo',
+                    'binding_version': 1,
+                    'binding_session': 'old-session',
+                })['status'],
+                'BINDING_GUARD_STALE',
+            )
+
+    def test_legacy_binding_remains_unguarded_until_rebind(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td); self.setup_project(home)
+
+            result = binding.validate_guard(home, 'demo')
+
+            self.assertEqual(result['status'], 'LEGACY_UNGUARDED')
+            self.assertFalse(result['guard_required'])
 
     def test_handoff_summarizes_jobs_and_pending_without_prompt_contents(self):
         with tempfile.TemporaryDirectory() as td:
@@ -48,5 +75,78 @@ class BindingTests(unittest.TestCase):
             self.assertEqual(snap['pending_events'][0]['job_id'],'a')
             self.assertNotIn('prompt_file', snap['active_jobs'][0])
             self.assertEqual(snap['recent_jobs'][0]['job_id'],'b')
+
+            self.assertEqual(snap['takeover']['execution']['active_jobs'][0]['job_id'], 'a')
+            self.assertEqual(snap['takeover']['project']['name'], 'demo')
+
+    def test_takeover_returns_current_binding_guard(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td); self.setup_project(home)
+            rebound = binding.rebind(home, 'demo', 'https://chatgpt.com/c/new', source='test')
+
+            snap = binding.takeover(home, 'demo')
+
+            self.assertEqual(snap['runtime']['binding']['version'], 2)
+            self.assertTrue(snap['runtime']['binding']['guarded'])
+            self.assertEqual(snap['runtime']['binding_guard'], rebound['binding_guard'])
+
+    def test_handoff_preserves_legacy_active_binding_shape_for_guarded_projects(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td); self.setup_project(home)
+            binding.rebind(home, 'demo', 'https://chatgpt.com/c/new', source='test')
+
+            snap = binding.handoff(home, 'demo')
+
+            self.assertEqual(
+                snap['active_binding'],
+                {
+                    'url': 'https://chatgpt.com/c/new',
+                    'version': 2,
+                    'updated_at': snap['active_binding']['updated_at'],
+                },
+            )
+            self.assertNotIn('guarded', snap['active_binding'])
+            self.assertTrue(snap['takeover']['runtime']['binding']['guarded'])
+
+    def test_takeover_separates_four_layers_without_creating_state(self):
+        with tempfile.TemporaryDirectory() as td:
+            home=Path(td); self.setup_project(home)
+            ledger.replace(home, 'demo', {'goal':'ship', 'decisions':['keep-json'], 'focus':'handoff'})
+            (home/'jobs').mkdir()
+            prompt = home/'jobs'/'a.prompt.txt'; result = home/'jobs'/'a.result.txt'
+            prompt.write_text('PRIVATE PROMPT')
+            result.write_text('PRIVATE RESULT')
+            state.write_job(home/'jobs'/'a.json', {
+                'job_id':'a', 'project':'demo', 'status':'running', 'role':'qa',
+                'target':'abc', 'access':'read', 'network':'local',
+                'model':'gpt-5.6-luna', 'reasoning_effort':'xhigh',
+                'pid':123, 'watcher_pid':456, 'prompt_file':str(prompt),
+                'result_file':str(result), 'output_file':str(home/'jobs'/'a.log'),
+            })
+            pending = home/'events'/'pending'; pending.mkdir(parents=True)
+            (pending/'1.json').write_text(json.dumps({'event_id':'e1','job_id':'a','project':'demo','status':'stalled'}))
+            pm_state.set_busy(home, 'https://chatgpt.com/c/old', reason='review', minutes=30)
+            before = {p.relative_to(home): p.read_bytes() for p in home.rglob('*') if p.is_file()}
+
+            snap=binding.takeover(home,'demo')
+
+            self.assertEqual(set(snap), {'status','project','supervision','execution','runtime'})
+            self.assertEqual(snap['project']['name'], 'demo')
+            self.assertEqual(snap['project']['working_state']['data']['goal'], 'ship')
+            self.assertEqual(snap['supervision']['role'], 'product_manager')
+            self.assertEqual(snap['supervision']['charter']['path'], 'docs/pm-operating-charter.md')
+            self.assertTrue(snap['supervision']['charter']['read_first'])
+            self.assertEqual(snap['execution']['active_jobs'][0]['job_id'], 'a')
+            self.assertEqual(snap['execution']['evidence'][0]['job_id'], 'a')
+            self.assertEqual(snap['execution']['evidence'][0]['result_file'], str(result))
+            self.assertEqual(snap['runtime']['binding']['url'], 'https://chatgpt.com/c/old')
+            self.assertEqual(snap['runtime']['callbacks']['pending'][0]['job_id'], 'a')
+            self.assertTrue(snap['runtime']['pm_state']['effective_busy'])
+            self.assertEqual(snap['runtime']['watchers'][0]['watcher_pid'], 456)
+            self.assertTrue(snap['runtime']['edge']['configured'])
+            self.assertNotIn('PRIVATE PROMPT', json.dumps(snap))
+            self.assertNotIn('PRIVATE RESULT', json.dumps(snap))
+            after = {p.relative_to(home): p.read_bytes() for p in home.rglob('*') if p.is_file()}
+            self.assertEqual(before, after)
 
 if __name__ == '__main__': unittest.main()

@@ -1,7 +1,7 @@
 # PMBridge Context-Pressure Design
 
 ## Goal
-Reduce unnecessary ChatGPT PM context consumption without restricting PM judgment or evidence access.
+Reduce unnecessary ChatGPT PM context consumption without restricting PM judgment or evidence access, while keeping read views separate from the state they expose.
 
 ## Boundary
 PMBridge may store, index, measure, and expose execution evidence. It must not decide what the PM is allowed to inspect, when the PM must hand off, what claims are accepted, or what project facts the PM must keep/drop.
@@ -11,10 +11,11 @@ PMBridge may store, index, measure, and expose execution evidence. It must not d
 2. **Durable PM ledger**: project-scoped arbitrary JSON controlled by the PM. PMBridge stores/version-stamps it but imposes no semantic schema.
 3. **Context doctor**: `pmbridge context <project>` reports objective proxies (jobs/callbacks/evidence bytes/result bytes since the current binding, ledger metadata). It never auto-rotates, blocks work, or deletes evidence.
 4. **Progressive disclosure docs**: callback guidance starts from the job record/compact packet and expands to raw log/diff/tests/artifacts whenever material. Independent verification remains mandatory; exhaustive raw-log ingestion is not.
+5. **Four-layer takeover view**: PM/Supervision, Project, Execution, and Transport & Runtime are shown explicitly by `takeover`; the view composes existing state and does not replace it. `handoff` is a compatibility alias.
 
 ## Non-goals
 - No raw-log read ban or truncation policy.
-- No automatic handoff threshold.
+- No automatic takeover threshold.
 - No LLM-generated summary treated as source of truth.
 - No deletion/compaction of the ChatGPT Web transcript.
 - No fixed PM review or authorization cadence.

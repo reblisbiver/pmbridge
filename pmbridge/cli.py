@@ -28,15 +28,15 @@ def bootstrap(args):
     if args.chat_url and args.chat_url != 'auto':
         chat_url = args.chat_url
     elif args.chat_bind_text:
-        binding = transport_edge.find_chat_by_texts(args.chat_bind_text, attempts=4, delay=0.25, timeout=2.0)
-        if binding.get('status') != 'FOUND':
-            return binding
-        chat_url = binding['url']
+        found = transport_edge.find_chat_by_texts(args.chat_bind_text, attempts=4, delay=0.25, timeout=2.0)
+        if found.get('status') != 'FOUND':
+            return found
+        chat_url = found['url']
     elif args.chat_bind_token:
-        binding = transport_edge.find_chat_by_token(args.chat_bind_token, attempts=4, delay=0.25)
-        if binding.get('status') != 'FOUND':
-            return binding
-        chat_url = binding['url']
+        found = transport_edge.find_chat_by_token(args.chat_bind_token, attempts=4, delay=0.25)
+        if found.get('status') != 'FOUND':
+            return found
+        chat_url = found['url']
     else:
         return {'status': 'NEEDS_CHAT_BINDING', 'message': 'Provide --chat-bind-text from recent user messages, --chat-bind-token, or an explicit --chat-url.'}
     cfg = {
@@ -48,6 +48,7 @@ def bootstrap(args):
         'default_model': executor.DEFAULT_MODEL,
         'default_reasoning_effort': executor.DEFAULT_REASONING_EFFORT,
     }
+    binding.enable_guard(cfg)
     home = home_path(args.home)
     config_path = config.save_project(home, cfg)
     runtime_result = runtime.install(home)
@@ -59,6 +60,7 @@ def bootstrap(args):
         'config': str(config_path),
         'repo_created': repo_result['created'],
         'runtime': runtime_result['command'],
+        'binding_guard': binding.guard(home, name),
         'supervisor_loaded': load_result.returncode == 0,
         'next': ['doctor', 'smoke'],
     }
@@ -81,7 +83,11 @@ def run_project(
     target=None,
     model: str = executor.DEFAULT_MODEL,
     reasoning_effort: str = executor.DEFAULT_REASONING_EFFORT,
+    binding_guard=None,
 ) -> dict:
+    guard_result = binding.validate_guard(home, project, binding_guard)
+    if guard_result['status'] not in {'READY', 'LEGACY_UNGUARDED'}:
+        return guard_result
     cfg = config.load_project(home, project)
     job = jobs.create_job(
         home, project, Path(cfg['repo']), instruction, int(cfg.get('stall_seconds', 1200)),
@@ -162,11 +168,13 @@ def build_parser():
     rp.add_argument('--target')
     rp.add_argument('--model', default=executor.DEFAULT_MODEL)
     rp.add_argument('--reasoning-effort', default=executor.DEFAULT_REASONING_EFFORT)
+    rp.add_argument('--binding-guard')
     rp.add_argument('--home')
     rp.add_argument('--json', action='store_true')
 
     sp = sub.add_parser('smoke')
     sp.add_argument('project')
+    sp.add_argument('--binding-guard')
     sp.add_argument('--home')
     sp.add_argument('--json', action='store_true')
 
@@ -204,6 +212,11 @@ def build_parser():
     ho.add_argument('project')
     ho.add_argument('--home')
     ho.add_argument('--json', action='store_true')
+
+    to = sub.add_parser('takeover')
+    to.add_argument('project')
+    to.add_argument('--home')
+    to.add_argument('--json', action='store_true')
 
     ins = sub.add_parser('inspect')
     ins.add_argument('job_id')
@@ -259,15 +272,23 @@ def main(argv=None):
         return 0 if result['status'] == 'READY' else 3
     if args.command == 'run':
         instruction = args.file.read_text(encoding='utf-8') if args.file else args.instruction
-        result = run_project(home, args.project, instruction, role=args.role, access=args.access, network=args.network, target=args.target, model=args.model, reasoning_effort=args.reasoning_effort)
+        try:
+            binding_guard = json.loads(args.binding_guard) if args.binding_guard else None
+        except json.JSONDecodeError:
+            binding_guard = {'_invalid': True}
+        result = run_project(home, args.project, instruction, role=args.role, access=args.access, network=args.network, target=args.target, model=args.model, reasoning_effort=args.reasoning_effort, binding_guard=binding_guard)
         emit(result, args.json)
-        return 0
+        return 0 if result.get('status') == 'STARTED' else 5
     if args.command == 'smoke':
         instruction = 'PMBridge end-to-end smoke test only. Do not modify files or git state. Reply exactly: PMBRIDGE_SMOKE_OK'
-        result = run_project(home, args.project, instruction, role='smoke', access='read', network='none', model=executor.DEFAULT_MODEL, reasoning_effort=executor.DEFAULT_REASONING_EFFORT)
+        try:
+            binding_guard = json.loads(args.binding_guard) if args.binding_guard else None
+        except json.JSONDecodeError:
+            binding_guard = {'_invalid': True}
+        result = run_project(home, args.project, instruction, role='smoke', access='read', network='none', model=executor.DEFAULT_MODEL, reasoning_effort=executor.DEFAULT_REASONING_EFFORT, binding_guard=binding_guard)
         result['expected_result'] = 'PMBRIDGE_SMOKE_OK'
         emit(result, args.json)
-        return 0
+        return 0 if result.get('status') == 'STARTED' else 5
     if args.command == 'notify':
         result = notify_job(home, args.job_id, args.status)
         emit(result, args.json)
@@ -290,6 +311,10 @@ def main(argv=None):
         return 0 if result.get('status') == 'READY' else 5
     if args.command == 'handoff':
         result = binding.handoff(home, args.project)
+        emit(result, args.json)
+        return 0
+    if args.command == 'takeover':
+        result = binding.takeover(home, args.project)
         emit(result, args.json)
         return 0
     if args.command == 'inspect':

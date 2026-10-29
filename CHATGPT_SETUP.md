@@ -1,10 +1,14 @@
 # PMBridge setup protocol for ChatGPT
 
-This file is the machine-facing setup contract. Prefer CLI JSON output over inferring behavior from implementation details.
+This file is the machine-facing setup guide. Read `docs/pm-operating-charter.md` first, then prefer CLI JSON output over inferring behavior from implementation details.
 
 ## Purpose
 
 Connect the user's current project to PMBridge so this ChatGPT web conversation can act as the supervisor/PM while Codex executes locally.
+
+## Read first
+
+Before bootstrap, dispatch, callback review, or replacement-conversation takeover, read the canonical PM operating charter at `docs/pm-operating-charter.md`. It defines the PM role and continuity expectations; it is not a per-turn contract or an authorization gate.
 
 ## Supported V0.1 environment
 
@@ -20,7 +24,8 @@ Connect the user's current project to PMBridge so this ChatGPT web conversation 
 2. Choose one or two distinctive excerpts from the **user's recent messages in this exact ChatGPT conversation**. Do not use assistant-written text, conversation titles, generic project names, or broad keywords. PMBridge only searches user-message containers and refuses ambiguous/no-match bindings. Then run:
 
    ```bash
-   python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-bind-text "<recent distinctive user text>" --chat-bind-text "<another recent distinctive user text>" --json
+   bootstrap_json="$(python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-bind-text "<recent distinctive user text>" --chat-bind-text "<another recent distinctive user text>" --json)"
+   printf '%s\n' "$bootstrap_json"
    ```
 
 3. Read the JSON status exactly.
@@ -32,7 +37,8 @@ The target directory is not inside a Git repository. Do **not** initialize Git a
 Ask the user whether to create a new local Git repository for that project. Only after explicit approval rerun:
 
 ```bash
-python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-bind-text "<recent distinctive user text>" --chat-bind-text "<another recent distinctive user text>" --init-repo --json
+bootstrap_json="$(python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-bind-text "<recent distinctive user text>" --chat-bind-text "<another recent distinctive user text>" --init-repo --json)"
+printf '%s\n' "$bootstrap_json"
 ```
 
 ### If chat binding fails
@@ -40,12 +46,19 @@ python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-bind-tex
 Automatic binding of the current Edge ChatGPT conversation failed. First retry with two distinctive recent user-message fragments from the current conversation. If binding still fails, ask the user to provide/confirm the exact current ChatGPT conversation URL, then rerun with:
 
 ```bash
-python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-url "<exact-chat-url>" --json
+bootstrap_json="$(python3 -m pmbridge.cli bootstrap --repo "<target-project-path>" --chat-url "<exact-chat-url>" --json)"
+printf '%s\n' "$bootstrap_json"
 ```
 
 ### If status is `READY`
 
-Use the stable installed command reported in `runtime` (normally `~/.pmbridge/bin/pmbridge`). Then run:
+Use the stable installed command reported in `runtime` (normally `~/.pmbridge/bin/pmbridge`). Keep the exact `binding_guard` object from the successful bootstrap JSON and serialize it for subsequent guarded commands:
+
+```bash
+binding_guard="$(printf '%s' "$bootstrap_json" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["binding_guard"], separators=(",", ":")))')"
+```
+
+Then run:
 
 ```bash
 ~/.pmbridge/bin/pmbridge doctor <project-name> --json
@@ -56,7 +69,7 @@ Do not report PMBridge ready unless doctor returns `READY`.
 4. Run one real end-to-end smoke job:
 
 ```bash
-~/.pmbridge/bin/pmbridge smoke <project-name> --json
+~/.pmbridge/bin/pmbridge smoke <project-name> --binding-guard "$binding_guard" --json
 ```
 
 The command returns a job id. Wait for the callback in this same ChatGPT conversation:
@@ -71,6 +84,7 @@ Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The 
 
 ```bash
 ~/.pmbridge/bin/pmbridge run <project-name> \
+  --binding-guard "$binding_guard" \
   --role <free-form-role> \
   [--access read|write] \
   [--network none|local|internet] \
@@ -85,7 +99,7 @@ Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The 
 
 Unless there is a deliberate reason to override them, use the explicit defaults `gpt-5.6-luna` and `xhigh`. PMBridge always passes both values to Codex; never rely on the user's current Codex UI/config selection.
 
-On callback, independently verify the material claims and target state. Start with `~/.pmbridge/bin/pmbridge inspect <job-id> --json`, which is a compact evidence index: job metadata, final-result preview, git boundaries/diffstat when available, and paths/sizes for raw evidence. Expand into the raw log, full result, diff, tests, artifacts, or other local state whenever they are material, uncertain, contradictory, or otherwise useful. Do not treat the compact packet or a completion callback as acceptance. PMBridge never forbids raw evidence access. Whether to continue, stop, ask the user, or how deeply to audit is determined by the PM from the task and current user authorization; PMBridge imposes no review depth, job-by-job/stage-by-stage approval cadence, context threshold, or automatic handoff.
+On callback, independently verify the material claims and target state. Start with `~/.pmbridge/bin/pmbridge inspect <job-id> --json`, which is a compact evidence index: job metadata, final-result preview, git boundaries/diffstat when available, and paths/sizes for raw evidence. Expand into the raw log, full result, diff, tests, artifacts, or other local state whenever they are material, uncertain, contradictory, or otherwise useful. Do not treat the compact packet or a completion callback as acceptance. PMBridge never forbids raw evidence access. Whether to continue, stop, ask the user, or how deeply to audit is determined by the PM from the task and current user authorization; PMBridge imposes no review depth, job-by-job/stage-by-stage approval cadence, context threshold, or automatic takeover.
 
 
 ## PM interaction / callback queue
@@ -115,7 +129,21 @@ For long-running projects, the PM may externalize its own current working state 
 ~/.pmbridge/bin/pmbridge context <project-name> --json
 ```
 
-Ledger content is entirely PM-controlled; PMBridge does not define required keys or delete chat history. `context` is diagnostic only and does not force compaction, rotation, or handoff.
+Ledger content is entirely PM-controlled; PMBridge does not define required keys or delete chat history. `context` is diagnostic project metrics only and does not force compaction, rotation, or takeover.
+
+## Takeover view
+
+`~/.pmbridge/bin/pmbridge takeover <project-name> --json` is the canonical replacement-PM read view. It separates PM/Supervision, Project, Execution, and Transport & Runtime information while composing the existing durable sources. It does not mutate jobs, callbacks, ledger state, or bindings. Its `runtime.binding_guard` is the small local dispatch guard for the active binding. `handoff` remains a backwards-compatible flat alias for older setup scripts.
+
+For a guarded project, pass that JSON guard to every `run` or `smoke` command:
+
+```bash
+~/.pmbridge/bin/pmbridge run <project-name> \
+  --binding-guard '{"project":"<project-name>","binding_version":<version>,"binding_session":"<session>"}' \
+  --instruction "..." --json
+```
+
+Guard validation reads only the project config and compares the project, binding version, and binding session locally; it does not run ChatGPT/Codex/browser/DOM discovery or read the takeover view on each dispatch. A matching guard starts the job. `BINDING_GUARD_REQUIRED`, `BINDING_GUARD_INVALID`, or `BINDING_GUARD_STALE` refuses the dispatch and requires takeover/rebind; PMBridge does not guess or auto-rebind. Projects created by bootstrap and projects after rebind are guarded. Existing configs without guarded mode remain legacy-compatible until bootstrap/rebind enables the guard.
 
 ## GitHub remote rule
 
@@ -137,8 +165,8 @@ Do not reconstruct PMBridge internals from memory. Always prefer the installed C
 
 When this ChatGPT conversation is approaching its context limit, start a new ChatGPT conversation rather than rebuilding PMBridge. In the new conversation:
 
-1. Read this file.
-2. Run `~/.pmbridge/bin/pmbridge handoff <project-name> --json` to load the durable execution state.
+1. Read `docs/pm-operating-charter.md`, then this file.
+2. Run `~/.pmbridge/bin/pmbridge takeover <project-name> --json` to load the four-layer durable read view. The older `handoff` command remains a backwards-compatible alias.
 3. Rebind the project using two distinctive recent user-message fragments from the **new** conversation:
 
 ```bash
@@ -148,6 +176,6 @@ When this ChatGPT conversation is approaching its context limit, start a new Cha
   --json
 ```
 
-A successful rebind increments the binding version, records the previous binding in local history, and runs doctor against the new conversation. It does not restart Codex jobs or rewrite pending events. Pending events resolve the project's active chat URL only when drained, so they follow the project to the new conversation.
+A successful rebind increments the binding version, rotates the binding session, returns a fresh `binding_guard`, records the previous binding in local history, and runs doctor against the new conversation. Use that returned guard for subsequent `run`/`smoke` commands. Any guard from before the rebind is invalid, including when the URL is unchanged. Rebind does not restart Codex jobs or rewrite pending events. Pending events resolve the project's active chat URL only when drained, so they follow the project to the new conversation.
 
 Treat only one binding as active. Do not keep two PM conversations competing for the same project.
