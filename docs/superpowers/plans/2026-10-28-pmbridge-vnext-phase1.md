@@ -47,9 +47,9 @@
 - Produces the canonical human/machine-readable charter at `docs/pm-operating-charter.md`.
 - Setup/takeover guidance reads the charter before bootstrap, dispatch, review, or replacement-PM takeover.
 
-- [ ] **Step 1: Write the charter and update setup guidance.** Keep the charter short and operational: PM role, supervision loop, project-context responsibility, evidence/review responsibility, plain-language owner reporting, correction/reminder behavior, and the explicit non-policy boundary. Do not add permissions or prohibitions beyond the approved direction.
-- [ ] **Step 2: Verify the guidance is discoverable.** Check the charter path, its first-read instruction in `CHATGPT_SETUP.md`, and that the setup protocol points replacement PMs to `takeover` while retaining `handoff` as a compatibility alias.
-- [ ] **Step 3: Commit the documentation-only change.**
+- [x] **Step 1: Write the charter and update setup guidance.** Keep the charter short and operational: PM role, supervision loop, project-context responsibility, evidence/review responsibility, plain-language owner reporting, correction/reminder behavior, and the explicit non-policy boundary. Do not add permissions or prohibitions beyond the approved direction.
+- [x] **Step 2: Verify the guidance is discoverable.** Check the charter path, its first-read instruction in `CHATGPT_SETUP.md`, and that the setup protocol points replacement PMs to `takeover` while retaining `handoff` as a compatibility alias.
+- [x] **Step 3: Commit the documentation-only change.**
 
 ```bash
 git add docs/pm-operating-charter.md CHATGPT_SETUP.md
@@ -72,8 +72,8 @@ git commit -m "docs: add canonical PM operating charter"
   - `runtime`: active binding, pending callbacks, PM busy/idle delivery state, and non-mutating Edge/watcher/recovery capability metadata.
 - Adds `pmbridge takeover <project> --json` as the canonical CLI surface.
 
-- [ ] **Step 1: Write failing tests for layer separation and source reuse.** Assert all four layer keys, ledger pass-through, job summaries, pending events, PM-state visibility, charter metadata, and absence of prompt/result contents in the takeover packet. Assert that `takeover` does not write or mutate jobs/events/ledger.
-- [ ] **Step 2: Run focused tests and verify RED.**
+- [x] **Step 1: Write failing tests for layer separation and source reuse.** Assert all four layer keys, ledger pass-through, job summaries, pending events, PM-state visibility, charter metadata, and absence of prompt/result contents in the takeover packet. Assert that `takeover` does not write or mutate jobs/events/ledger.
+- [x] **Step 2: Run focused tests and verify RED.**
 
 ```bash
 python3 -m pytest -q tests/test_binding.py tests/test_runtime_cli.py
@@ -81,14 +81,14 @@ python3 -m pytest -q tests/test_binding.py tests/test_runtime_cli.py
 
 Expected: failure because `binding.takeover` and the `takeover` parser/handler do not exist.
 
-- [ ] **Step 3: Implement the canonical builder from existing sources.** Refactor the current handoff collection logic into `takeover`; read config, ledger, jobs, pending events, and PM state through their existing modules. Keep job filtering/order and evidence redaction behavior unchanged. Add only non-mutating descriptive runtime metadata.
-- [ ] **Step 4: Run focused tests and verify GREEN.**
+- [x] **Step 3: Implement the canonical builder from existing sources.** Refactor the current handoff collection logic into `takeover`; read config, ledger, jobs, pending events, and PM state through their existing modules. Keep job filtering/order and evidence redaction behavior unchanged. Add only non-mutating descriptive runtime metadata.
+- [x] **Step 4: Run focused tests and verify GREEN.**
 
 ```bash
 python3 -m pytest -q tests/test_binding.py tests/test_runtime_cli.py
 ```
 
-- [ ] **Step 5: Commit the canonical read-model change.**
+- [x] **Step 5: Commit the canonical read-model change.**
 
 ```bash
 git add pmbridge/binding.py pmbridge/cli.py tests/test_binding.py tests/test_runtime_cli.py
@@ -107,22 +107,22 @@ git commit -m "feat: add four-layer takeover read model"
 - The generic `handoff` result exposes the canonical model under `takeover` for consumers that need explicit layers.
 - `compat/pm_context.py` adds a `takeover(root)` adapter and `takeover` CLI command using its existing legacy inspect/context/ledger sources; it does not emulate generic job/binding storage.
 
-- [ ] **Step 1: Extend failing compatibility tests.** Assert old handoff keys still work, the nested canonical view is present, and the legacy adapter returns four explicit sections while preserving existing `inspect`, `context`, and `ledger` behavior.
-- [ ] **Step 2: Run focused tests and verify RED.**
+- [x] **Step 1: Extend failing compatibility tests.** Assert old handoff keys still work, the nested canonical view is present, and the legacy adapter returns four explicit sections while preserving existing `inspect`, `context`, and `ledger` behavior.
+- [x] **Step 2: Run focused tests and verify RED.**
 
 ```bash
 python3 -m pytest -q tests/test_binding.py tests/test_legacy_context.py
 ```
 
-- [ ] **Step 3: Implement `handoff` as a derived compatibility view.** Preserve old field names and values, add a deprecation/read-model note in code/docs, and do not write new state.
-- [ ] **Step 4: Implement the legacy adapter.** Reuse existing legacy functions; represent unavailable generic runtime capabilities explicitly instead of inventing binding, watcher, or recovery state.
-- [ ] **Step 5: Run focused tests and verify GREEN.**
+- [x] **Step 3: Implement `handoff` as a derived compatibility view.** Preserve old field names and values, add a deprecation/read-model note in code/docs, and do not write new state.
+- [x] **Step 4: Implement the legacy adapter.** Reuse existing legacy functions; represent unavailable generic runtime capabilities explicitly instead of inventing binding, watcher, or recovery state.
+- [x] **Step 5: Run focused tests and verify GREEN.**
 
 ```bash
 python3 -m pytest -q tests/test_binding.py tests/test_legacy_context.py
 ```
 
-- [ ] **Step 6: Commit the compatibility change.**
+- [x] **Step 6: Commit the compatibility change.**
 
 ```bash
 git add pmbridge/binding.py compat/pm_context.py tests/test_binding.py tests/test_legacy_context.py
@@ -142,9 +142,9 @@ git commit -m "refactor: make handoff and legacy views layer-aware"
 - Documentation identifies `takeover` as the canonical read view and `handoff` as the backwards-compatible alias.
 - Documentation states that PMBridge supplies capability/infrastructure and preserves PM judgment, project-state flexibility, raw evidence access, and owner authorization boundaries.
 
-- [ ] **Step 1: Update docs without changing runtime semantics.** Add the architecture map, state-source map, takeover/rebind flow, charter-first setup instruction, and compatibility/deprecation note. Reclassify `context` as diagnostic project metrics rather than a pressure policy. Clarify that legacy bridges are adapters/independent state systems.
-- [ ] **Step 2: Review every changed doc against the approved anti-goals.** Remove wording that could imply mandatory approval cadence, fixed topology, automatic handoff, evidence restriction, or policy enforcement.
-- [ ] **Step 3: Commit the documentation alignment.**
+- [x] **Step 1: Update docs without changing runtime semantics.** Add the architecture map, state-source map, takeover/rebind flow, charter-first setup instruction, and compatibility/deprecation note. Reclassify `context` as diagnostic project metrics rather than a pressure policy. Clarify that legacy bridges are adapters/independent state systems.
+- [x] **Step 2: Review every changed doc against the approved anti-goals.** Remove wording that could imply mandatory approval cadence, fixed topology, automatic handoff, evidence restriction, or policy enforcement.
+- [x] **Step 3: Commit the documentation alignment.**
 
 ```bash
 git add README.md docs/spec.md docs/context-pressure-design.md CHATGPT_SETUP.md
@@ -156,21 +156,21 @@ git commit -m "docs: align PMBridge with four-layer architecture"
 **Files:**
 - Modify only files listed above unless a test exposes a directly necessary compatibility defect.
 
-- [ ] **Step 1: Run focused tests for takeover, compatibility, and existing runtime contracts.**
+- [x] **Step 1: Run focused tests for takeover, compatibility, and existing runtime contracts.**
 
 ```bash
 python3 -m pytest -q tests/test_binding.py tests/test_legacy_context.py tests/test_runtime_cli.py tests/test_evidence.py tests/test_event_queue.py tests/test_recovery.py
 ```
 
-- [ ] **Step 2: Run full pytest and compile checks.**
+- [x] **Step 2: Run full pytest and compile checks.**
 
 ```bash
 python3 -m pytest -q
 python3 -m compileall -q pmbridge compat
 ```
 
-- [ ] **Step 3: Inspect the final diff and status.** Confirm `docs/bugfix-cross-project-drain.md` was not touched, no runtime state or conversation URLs were added, and all commits are focused on phase 1.
-- [ ] **Step 4: Commit any directly necessary test/doc correction, then rerun the complete verification commands.**
+- [x] **Step 3: Inspect the final diff and status.** Confirm `docs/bugfix-cross-project-drain.md` was not touched, no runtime state or conversation URLs were added, and all commits are focused on phase 1.
+- [x] **Step 4: Commit any directly necessary test/doc correction, then rerun the complete verification commands.**
 
 ## Deferred beyond phase 1
 
