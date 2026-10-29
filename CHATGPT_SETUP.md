@@ -123,7 +123,17 @@ Ledger content is entirely PM-controlled; PMBridge does not define required keys
 
 ## Takeover view
 
-`~/.pmbridge/bin/pmbridge takeover <project-name> --json` is the canonical replacement-PM read view. It separates PM/Supervision, Project, Execution, and Transport & Runtime information while composing the existing durable sources. It does not mutate jobs, callbacks, ledger state, or bindings. `handoff` remains a backwards-compatible flat alias for older setup scripts.
+`~/.pmbridge/bin/pmbridge takeover <project-name> --json` is the canonical replacement-PM read view. It separates PM/Supervision, Project, Execution, and Transport & Runtime information while composing the existing durable sources. It does not mutate jobs, callbacks, ledger state, or bindings. Its `runtime.binding_guard` is the small local dispatch guard for the active binding. `handoff` remains a backwards-compatible flat alias for older setup scripts.
+
+For a guarded project, pass that JSON guard to every `run` or `smoke` command:
+
+```bash
+~/.pmbridge/bin/pmbridge run <project-name> \
+  --binding-guard '{"project":"<project-name>","binding_version":<version>,"binding_session":"<session>"}' \
+  --instruction "..." --json
+```
+
+Guard validation reads only the project config and compares the project, binding version, and binding session locally; it does not run ChatGPT/Codex/browser/DOM discovery or read the takeover view on each dispatch. A matching guard starts the job. `BINDING_GUARD_REQUIRED`, `BINDING_GUARD_INVALID`, or `BINDING_GUARD_STALE` refuses the dispatch and requires takeover/rebind; PMBridge does not guess or auto-rebind. Projects created by bootstrap and projects after rebind are guarded. Existing configs without guarded mode remain legacy-compatible until bootstrap/rebind enables the guard.
 
 ## GitHub remote rule
 
@@ -156,6 +166,6 @@ When this ChatGPT conversation is approaching its context limit, start a new Cha
   --json
 ```
 
-A successful rebind increments the binding version, records the previous binding in local history, and runs doctor against the new conversation. It does not restart Codex jobs or rewrite pending events. Pending events resolve the project's active chat URL only when drained, so they follow the project to the new conversation.
+A successful rebind increments the binding version, rotates the binding session, returns a fresh `binding_guard`, records the previous binding in local history, and runs doctor against the new conversation. Use that returned guard for subsequent `run`/`smoke` commands. Any guard from before the rebind is invalid, including when the URL is unchanged. Rebind does not restart Codex jobs or rewrite pending events. Pending events resolve the project's active chat URL only when drained, so they follow the project to the new conversation.
 
 Treat only one binding as active. Do not keep two PM conversations competing for the same project.

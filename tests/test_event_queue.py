@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from pmbridge import events, pm_state
+from pmbridge import binding, events, pm_state
 
 
 class PMStateTests(unittest.TestCase):
@@ -52,6 +52,28 @@ class EventQueueTests(unittest.TestCase):
             self.assertEqual([x['event_id'] for x in pending], [e1['event_id'], e2['event_id']])
             self.assertEqual(pending[0]['role'], 'qa')
             self.assertEqual(pending[1]['target'], 'a')
+
+    @patch('pmbridge.events.transport_edge.send')
+    @patch('pmbridge.events.transport_edge.ui_state')
+    def test_pending_callback_after_rebind_uses_current_active_binding(self, ui_state, send):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td); self.make_cfg(home, chat_url='https://chatgpt.com/c/old')
+            (home/'jobs').mkdir()
+            (home/'jobs'/'job-1.json').write_text(json.dumps({
+                'job_id': 'job-1', 'project': 'demo', 'role': 'qa', 'status': 'completed',
+            }))
+            events.enqueue_job_event(home, 'job-1', 'completed')
+            binding.rebind(home, 'demo', 'https://chatgpt.com/c/new', source='test')
+            ui_state.return_value = {
+                'reachable': True, 'composer_nonempty': False, 'generating': False,
+                'signature': 'stable',
+            }
+            send.return_value = {'ok': True, 'returncode': 0, 'error': ''}
+
+            result = events.drain(home)
+
+            self.assertEqual(result['delivered'], 1)
+            self.assertEqual(send.call_args.args[0], 'https://chatgpt.com/c/new')
 
     @patch('pmbridge.events.time.time_ns', side_effect=[1, 2])
     @patch('pmbridge.events.transport_edge.send')
