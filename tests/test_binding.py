@@ -69,7 +69,7 @@ class BindingTests(unittest.TestCase):
             snap=binding.handoff(home,'demo')
             self.assertEqual(snap['project'],'demo')
             self.assertEqual(snap['execution_defaults']['model'],'gpt-5.6-luna')
-            self.assertEqual(snap['execution_defaults']['reasoning_effort'],'xhigh')
+            self.assertEqual(snap['execution_defaults']['reasoning_effort'],'high')
             self.assertEqual(snap['active_binding']['url'],'https://chatgpt.com/c/old')
             self.assertEqual([j['job_id'] for j in snap['active_jobs']],['a'])
             self.assertEqual(snap['pending_events'][0]['job_id'],'a')

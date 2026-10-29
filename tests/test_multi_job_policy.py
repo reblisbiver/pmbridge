@@ -12,7 +12,7 @@ class ExecutionPolicyTests(unittest.TestCase):
         self.assertIn('-m', cmd)
         self.assertEqual(cmd[cmd.index('-m') + 1], 'gpt-5.6-luna')
         self.assertIn('-c', cmd)
-        self.assertIn('model_reasoning_effort="xhigh"', cmd)
+        self.assertIn('model_reasoning_effort="high"', cmd)
         self.assertIn('--approve-for-me', cmd)
         self.assertNotIn('-s', cmd)
 

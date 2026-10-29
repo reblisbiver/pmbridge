@@ -90,14 +90,14 @@ Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The 
   [--network none|local|internet] \
   --target <optional-commit-or-version> \
   --model gpt-5.6-luna \
-  --reasoning-effort xhigh \
+  --reasoning-effort high \
   --file <task-file> \
   --json
 ```
 
 `--access` is optional. If omitted, PMBridge does not add a Codex sandbox/profile override; the Codex invocation uses its own configured access behavior. Use `--access read` when the worker should be unable to modify the workspace, and `--access write` when it needs workspace writes. Be careful with `read`: although PMBridge's terminal callback is emitted by the watcher outside the Codex sandbox, a task that itself must write local state, artifacts, or bridge/sidecar files can be blocked by read-only access. `--network` is optional. If omitted, PMBridge does not override Codex network policy. Use `none` to keep network disabled, `local` for loopback-only access, or `internet` for public outbound access. `local` and `internet` use named profiles that also encode filesystem policy, so either requires an explicit `--access read|write`. Multiple jobs may run concurrently. One-writer/many-readers is only a possible topology, not a framework rule.
 
-Unless there is a deliberate reason to override them, use the explicit defaults `gpt-5.6-luna` and `xhigh`. PMBridge always passes both values to Codex; never rely on the user's current Codex UI/config selection.
+Unless there is a deliberate reason to override them, use the explicit defaults `gpt-5.6-luna` and `high`. PMBridge always passes both values to Codex; never rely on the user's current Codex UI/config selection.
 
 On callback, independently verify the material claims and target state. Start with `~/.pmbridge/bin/pmbridge inspect <job-id> --json`, which is a compact evidence index: job metadata, final-result preview, git boundaries/diffstat when available, and paths/sizes for raw evidence. Expand into the raw log, full result, diff, tests, artifacts, or other local state whenever they are material, uncertain, contradictory, or otherwise useful. Do not treat the compact packet or a completion callback as acceptance. PMBridge never forbids raw evidence access. Whether to continue, stop, ask the user, or how deeply to audit is determined by the PM from the task and current user authorization; PMBridge imposes no review depth, job-by-job/stage-by-stage approval cadence, context threshold, or automatic takeover.
 

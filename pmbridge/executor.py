@@ -5,7 +5,7 @@ from . import codex_profiles
 
 APP_CODEX = Path('/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex')
 DEFAULT_MODEL = 'gpt-5.6-luna'
-DEFAULT_REASONING_EFFORT = 'xhigh'
+DEFAULT_REASONING_EFFORT = 'high'
 
 
 def find_codex() -> Path:

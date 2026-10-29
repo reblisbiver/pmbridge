@@ -57,7 +57,7 @@ Existing project-specific bridges remain independent legacy installations. Compa
 
 PMBridge supports multiple simultaneous Codex jobs. Concurrency policy is controlled by the PM at dispatch time, not hard-coded at project level. Each job carries `role`, `access`, optional `target`, `model`, and `reasoning_effort`. Recommended workflows may use one writer and multiple readers, but the framework does not enforce that topology.
 
-All Codex invocations explicitly pin their execution model. V0.1 defaults are `gpt-5.6-luna` with `xhigh` reasoning; per-job overrides are supported.
+All Codex invocations explicitly pin their execution model. V0.1 defaults are `gpt-5.6-luna` with `high` reasoning; per-job overrides are supported.
 
 Codex status callbacks enter a durable FIFO event queue. Events are delivered to ChatGPT only after the PM logical state and web UI are both idle. This prevents concurrent worker completions from interrupting the PM or the user's active interaction.
 
@@ -65,7 +65,7 @@ Codex status callbacks enter a durable FIFO event queue. Events are delivered to
 
 Filesystem access is an optional PM override: `access` may be omitted, `read`, or `write`. When omitted, PMBridge must not inject a Codex sandbox/profile choice. `network` may be omitted, `none`, `local`, or `internet`. When omitted, PMBridge must not inject a Codex network policy. `local` selects a loopback-only named profile; `internet` selects a named profile with explicit public-domain allowance. Both require explicit `read` or `write` because the selected permission profile also defines filesystem policy.
 
-Every Codex invocation explicitly passes the model and reasoning effort. Defaults are `gpt-5.6-luna` and `xhigh`; no bridge job may silently inherit a changed global/UI model setting.
+Every Codex invocation explicitly passes the model and reasoning effort. Defaults are `gpt-5.6-luna` and `high`; no bridge job may silently inherit a changed global/UI model setting.
 
 
 ## Chat conversation takeover

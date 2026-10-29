@@ -16,7 +16,7 @@ This repository is optimized for personal reuse rather than broad compatibility.
 - periodically recovers lost watchers with a macOS LaunchAgent;
 - queues concurrent worker callbacks and delivers them FIFO only when the PM/chat UI is idle;
 - lets the PM choose filesystem access (`read`/`write`) and optional network policy (`none`/`local`/`internet`) per job, while allowing omission to inherit Codex network policy;
-- explicitly pins every Codex job to `gpt-5.6-luna` + `xhigh` by default, with per-job overrides;
+- explicitly pins every Codex job to `gpt-5.6-luna` + `high` by default, with per-job overrides;
 - provides `doctor` and real no-op `smoke` checks;
 - exposes compact job evidence with raw evidence always available on demand;
 - stores an optional PM-controlled durable ledger and reports diagnostic project metrics without forcing takeover or pruning.
