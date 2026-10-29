@@ -2,8 +2,9 @@
 """Non-invasive context helpers for legacy PM bridges.
 
 This file does not dispatch, watch, notify, mutate jobs, or alter callback routing.
-It only indexes existing evidence, stores PM-controlled ledger JSON, and reports
-objective byte/count metrics. Raw evidence is never removed.
+It only indexes existing evidence, stores PM-controlled ledger JSON, reports
+objective byte/count metrics, and adapts those legacy sources into a four-layer
+takeover view. Raw evidence is never removed.
 """
 import argparse, json, os
 from collections import Counter
@@ -105,6 +106,36 @@ def context(root):
     return {'status':'READY','kind':'legacy-job','jobs':len(records),'jobs_by_status':dict(Counter(r.get('status') for r in records)),'raw_evidence_bytes':sum(size(r.get('output_file')) for r in records),'result_bytes':sum(size(r.get('result_file')) for r in records),'ledger':ledger_load(root)}
 
 
+def takeover(root):
+    """Adapt legacy read helpers without pretending to own generic runtime state."""
+    metrics = context(root)
+    execution = {key: value for key, value in metrics.items() if key not in {'status', 'kind', 'ledger'}}
+    return {
+        'status': 'READY',
+        'project': {
+            'name': root.name,
+            'root': str(root),
+            'working_state': metrics.get('ledger'),
+        },
+        'supervision': {
+            'role': 'product_manager',
+            'charter': {'path': 'docs/pm-operating-charter.md', 'read_first': True},
+            'continuity': {'canonical_view': 'takeover', 'adapter': 'compat.pm_context'},
+        },
+        'execution': {'adapter': 'compat.pm_context', 'kind': metrics.get('kind'), **execution},
+        'runtime': {
+            'adapter': 'compat.pm_context',
+            'capabilities': {
+                'binding': False,
+                'callbacks': False,
+                'edge_delivery': False,
+                'watchers': False,
+                'recovery': False,
+            },
+        },
+    }
+
+
 def get_data(args):
     raw=args.file.read_text(encoding='utf-8') if args.file else args.data
     return json.loads(raw)
@@ -116,6 +147,7 @@ def main(argv=None):
     sub=ap.add_subparsers(dest='command',required=True)
     i=sub.add_parser('inspect'); i.add_argument('id'); i.add_argument('--full-result',action='store_true')
     sub.add_parser('context')
+    sub.add_parser('takeover')
     lg=sub.add_parser('ledger'); ls=lg.add_subparsers(dest='ledger_command',required=True)
     ls.add_parser('show')
     for n in ('replace','patch'):
@@ -123,6 +155,7 @@ def main(argv=None):
     a=ap.parse_args(argv); root=a.bridge_root.expanduser().resolve()
     if a.command=='inspect': out=inspect(root,a.id,a.full_result)
     elif a.command=='context': out=context(root)
+    elif a.command=='takeover': out=takeover(root)
     elif a.ledger_command=='show': out=ledger_load(root) or {'status':'EMPTY','data':None}
     elif a.ledger_command=='replace': out=ledger_write(root,get_data(a))
     else:

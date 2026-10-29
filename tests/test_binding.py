@@ -49,6 +49,9 @@ class BindingTests(unittest.TestCase):
             self.assertNotIn('prompt_file', snap['active_jobs'][0])
             self.assertEqual(snap['recent_jobs'][0]['job_id'],'b')
 
+            self.assertEqual(snap['takeover']['execution']['active_jobs'][0]['job_id'], 'a')
+            self.assertEqual(snap['takeover']['project']['name'], 'demo')
+
     def test_takeover_separates_four_layers_without_creating_state(self):
         with tempfile.TemporaryDirectory() as td:
             home=Path(td); self.setup_project(home)
