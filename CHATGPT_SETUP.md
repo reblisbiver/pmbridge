@@ -6,6 +6,10 @@ This file is the machine-facing setup contract. Prefer CLI JSON output over infe
 
 Connect the user's current project to PMBridge so this ChatGPT web conversation can act as the supervisor/PM while Codex executes locally.
 
+## Read first
+
+Before bootstrap, dispatch, callback review, or replacement-conversation takeover, read the canonical PM operating charter at `docs/pm-operating-charter.md`. It defines the PM role and continuity expectations; it is not a per-turn contract or an authorization gate.
+
 ## Supported V0.1 environment
 
 - macOS
@@ -137,8 +141,8 @@ Do not reconstruct PMBridge internals from memory. Always prefer the installed C
 
 When this ChatGPT conversation is approaching its context limit, start a new ChatGPT conversation rather than rebuilding PMBridge. In the new conversation:
 
-1. Read this file.
-2. Run `~/.pmbridge/bin/pmbridge handoff <project-name> --json` to load the durable execution state.
+1. Read `docs/pm-operating-charter.md`, then this file.
+2. Run `~/.pmbridge/bin/pmbridge takeover <project-name> --json` to load the four-layer durable read view. The older `handoff` command remains a backwards-compatible alias.
 3. Rebind the project using two distinctive recent user-message fragments from the **new** conversation:
 
 ```bash
