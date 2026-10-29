@@ -66,6 +66,55 @@ class CliTests(unittest.TestCase):
             self.assertEqual(cfg['binding_session'], result['binding_guard']['binding_session'])
 
     @patch('pmbridge.cli.spawn_watcher')
+    @patch('pmbridge.cli.launchd.load')
+    @patch('pmbridge.cli.launchd.install')
+    @patch('pmbridge.cli.runtime.install')
+    @patch('pmbridge.cli.gitops.ensure_repo')
+    def test_bootstrap_guard_drives_first_smoke_and_run_cli_commands(self, ensure_repo, runtime_install, launchd_install, launchd_load, spawn):
+        import io
+        import json
+        from contextlib import redirect_stdout
+
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            repo = home/'demo'; repo.mkdir()
+            ensure_repo.return_value = {'status': 'READY', 'repo': str(repo), 'created': False}
+            runtime_install.return_value = {'command': str(home/'bin'/'pmbridge')}
+            launchd_install.return_value = home/'launchd.plist'
+            launchd_load.return_value.returncode = 0
+            spawn.return_value.pid = 42
+
+            bootstrap_out = io.StringIO()
+            with redirect_stdout(bootstrap_out):
+                bootstrap_rc = cli.main([
+                    'bootstrap', '--repo', str(repo), '--chat-url', 'https://chatgpt.com/c/demo',
+                    '--home', str(home), '--json',
+                ])
+            bootstrap = json.loads(bootstrap_out.getvalue())
+            guard_json = json.dumps(bootstrap['binding_guard'])
+
+            smoke_out = io.StringIO()
+            with redirect_stdout(smoke_out):
+                smoke_rc = cli.main([
+                    'smoke', 'demo', '--binding-guard', guard_json,
+                    '--home', str(home), '--json',
+                ])
+
+            run_out = io.StringIO()
+            with redirect_stdout(run_out):
+                run_rc = cli.main([
+                    'run', 'demo', '--instruction', 'First guarded run',
+                    '--binding-guard', guard_json, '--home', str(home), '--json',
+                ])
+
+            self.assertEqual(bootstrap_rc, 0)
+            self.assertEqual(smoke_rc, 0)
+            self.assertEqual(run_rc, 0)
+            self.assertEqual(json.loads(smoke_out.getvalue())['status'], 'STARTED')
+            self.assertEqual(json.loads(run_out.getvalue())['status'], 'STARTED')
+            self.assertEqual(spawn.call_count, 2)
+
+    @patch('pmbridge.cli.spawn_watcher')
     def test_run_cli_accepts_guard_json_returned_by_takeover(self, spawn):
         import io
         import json

@@ -90,6 +90,24 @@ class BindingTests(unittest.TestCase):
             self.assertTrue(snap['runtime']['binding']['guarded'])
             self.assertEqual(snap['runtime']['binding_guard'], rebound['binding_guard'])
 
+    def test_handoff_preserves_legacy_active_binding_shape_for_guarded_projects(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td); self.setup_project(home)
+            binding.rebind(home, 'demo', 'https://chatgpt.com/c/new', source='test')
+
+            snap = binding.handoff(home, 'demo')
+
+            self.assertEqual(
+                snap['active_binding'],
+                {
+                    'url': 'https://chatgpt.com/c/new',
+                    'version': 2,
+                    'updated_at': snap['active_binding']['updated_at'],
+                },
+            )
+            self.assertNotIn('guarded', snap['active_binding'])
+            self.assertTrue(snap['takeover']['runtime']['binding']['guarded'])
+
     def test_takeover_separates_four_layers_without_creating_state(self):
         with tempfile.TemporaryDirectory() as td:
             home=Path(td); self.setup_project(home)

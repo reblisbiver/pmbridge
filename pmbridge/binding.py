@@ -220,11 +220,16 @@ def takeover(home: Path, project: str, recent_limit: int = 8) -> dict:
 def handoff(home: Path, project: str, recent_limit: int = 8) -> dict:
     """Compatibility wrapper for the canonical ``takeover`` read view."""
     view = takeover(home, project, recent_limit=recent_limit)
+    binding_view = view['runtime']['binding']
+    legacy_active_binding = {
+        key: binding_view[key]
+        for key in ('url', 'version', 'updated_at')
+    }
     return {
         'status': view['status'],
         'project': view['project']['name'],
         'repo': view['project']['repo'],
-        'active_binding': view['runtime']['binding'],
+        'active_binding': legacy_active_binding,
         'execution_defaults': view['execution']['defaults'],
         'active_jobs': view['execution']['active_jobs'],
         'recent_jobs': view['execution']['recent_jobs'],

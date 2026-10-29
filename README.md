@@ -48,28 +48,36 @@ Automatic chat binding is ownership-sensitive: markers are matched only inside C
 From this repository:
 
 ```bash
-python3 -m pmbridge.cli bootstrap --repo /path/to/project --chat-bind-text "<recent user text>" --chat-bind-text "<another recent user text>" --json
+bootstrap_json="$(python3 -m pmbridge.cli bootstrap --repo /path/to/project --chat-bind-text "<recent user text>" --chat-bind-text "<another recent user text>" --json)"
+printf '%s\n' "$bootstrap_json"
 ```
 
 If the result is `NEEDS_REPO_CONFIRMATION`, initialize only after deciding explicitly:
 
 ```bash
-python3 -m pmbridge.cli bootstrap --repo /path/to/project --chat-bind-text "<recent user text>" --chat-bind-text "<another recent user text>" --init-repo --json
+bootstrap_json="$(python3 -m pmbridge.cli bootstrap --repo /path/to/project --chat-bind-text "<recent user text>" --chat-bind-text "<another recent user text>" --init-repo --json)"
+printf '%s\n' "$bootstrap_json"
+```
+
+After a `READY` bootstrap, pass its exact `binding_guard` object to every guarded command:
+
+```bash
+binding_guard="$(printf '%s' "$bootstrap_json" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["binding_guard"], separators=(",", ":")))')"
 ```
 
 Then:
 
 ```bash
 ~/.pmbridge/bin/pmbridge doctor <project> --json
-~/.pmbridge/bin/pmbridge smoke <project> --json
+~/.pmbridge/bin/pmbridge smoke <project> --binding-guard "$binding_guard" --json
 ```
 
 Example concurrent dispatches controlled by the PM:
 
 ```bash
-~/.pmbridge/bin/pmbridge run <project> --role implementer --access write --network internet --file implement.md --json
-~/.pmbridge/bin/pmbridge run <project> --role qa --access read --network none --target <commit> --file audit.md --json
-~/.pmbridge/bin/pmbridge run <project> --role blackbox --access read --network local --target <commit> --file explore.md --json
+~/.pmbridge/bin/pmbridge run <project> --binding-guard "$binding_guard" --role implementer --access write --network internet --file implement.md --json
+~/.pmbridge/bin/pmbridge run <project> --binding-guard "$binding_guard" --role qa --access read --network none --target <commit> --file audit.md --json
+~/.pmbridge/bin/pmbridge run <project> --binding-guard "$binding_guard" --role blackbox --access read --network local --target <commit> --file explore.md --json
 ```
 
 These are conventions, not fixed roles. The PM can create any role names. `--access read|write` is an optional override, not a required PMBridge policy: omit it when PMBridge should not impose a filesystem sandbox choice. Explicit `read` can block tasks that need to write local state or artifacts; PMBridge's watcher callback itself remains outside that Codex sandbox. `--network` is optional. Omit it to leave Codex network policy unchanged; use `none` to keep network disabled, `local` for loopback-only access, or `internet` for public outbound access. `local` and `internet` require explicit `--access` because named network profiles also define filesystem policy.
