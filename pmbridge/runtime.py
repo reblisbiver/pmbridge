@@ -15,9 +15,10 @@ def install(home: Path, codex_home=None) -> dict:
     runtime_root.mkdir(parents=True, exist_ok=True)
     bin_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
-    if target_pkg.exists():
-        shutil.rmtree(target_pkg)
-    shutil.copytree(source_pkg, target_pkg)
+    if source_pkg.resolve() != target_pkg.resolve():
+        if target_pkg.exists():
+            shutil.rmtree(target_pkg)
+        shutil.copytree(source_pkg, target_pkg)
     script = target_pkg / 'edge_notify.sh'
     if script.exists():
         script.chmod(script.stat().st_mode | stat.S_IXUSR)

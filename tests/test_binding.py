@@ -30,6 +30,33 @@ class BindingTests(unittest.TestCase):
             self.assertEqual(entry['previous_chat_url'],'https://chatgpt.com/c/old')
             self.assertEqual(entry['new_chat_url'],'https://chatgpt.com/c/new')
             self.assertEqual(out['binding_version'],2)
+            self.assertTrue(cfg['binding_guarded'])
+            self.assertEqual(out['binding_guard'], {
+                'project': 'demo',
+                'binding_version': 2,
+                'binding_session': cfg['binding_session'],
+            })
+            self.assertEqual(
+                binding.validate_guard(home, 'demo', out['binding_guard'])['status'],
+                'READY',
+            )
+            self.assertEqual(
+                binding.validate_guard(home, 'demo', {
+                    'project': 'demo',
+                    'binding_version': 1,
+                    'binding_session': 'old-session',
+                })['status'],
+                'BINDING_GUARD_STALE',
+            )
+
+    def test_legacy_binding_remains_unguarded_until_rebind(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td); self.setup_project(home)
+
+            result = binding.validate_guard(home, 'demo')
+
+            self.assertEqual(result['status'], 'LEGACY_UNGUARDED')
+            self.assertFalse(result['guard_required'])
 
     def test_handoff_summarizes_jobs_and_pending_without_prompt_contents(self):
         with tempfile.TemporaryDirectory() as td:
@@ -51,6 +78,17 @@ class BindingTests(unittest.TestCase):
 
             self.assertEqual(snap['takeover']['execution']['active_jobs'][0]['job_id'], 'a')
             self.assertEqual(snap['takeover']['project']['name'], 'demo')
+
+    def test_takeover_returns_current_binding_guard(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td); self.setup_project(home)
+            rebound = binding.rebind(home, 'demo', 'https://chatgpt.com/c/new', source='test')
+
+            snap = binding.takeover(home, 'demo')
+
+            self.assertEqual(snap['runtime']['binding']['version'], 2)
+            self.assertTrue(snap['runtime']['binding']['guarded'])
+            self.assertEqual(snap['runtime']['binding_guard'], rebound['binding_guard'])
 
     def test_takeover_separates_four_layers_without_creating_state(self):
         with tempfile.TemporaryDirectory() as td:

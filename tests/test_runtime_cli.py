@@ -20,8 +20,79 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue((Path(td)/'.codex'/'pmbridge-read-local.config.toml').exists())
             self.assertTrue((Path(td)/'.codex'/'pmbridge-write-local.config.toml').exists())
 
+    def test_install_from_installed_runtime_does_not_delete_its_source_package(self):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)/'.pmbridge'
+            target = home/'runtime'/'pmbridge'
+            target.mkdir(parents=True)
+            marker = target/'installed-marker.txt'
+            marker.write_text('keep', encoding='utf-8')
+            (target/'runtime.py').write_text('# installed runtime entrypoint\n', encoding='utf-8')
+
+            with patch('pmbridge.runtime.__file__', str(target/'runtime.py')):
+                result = runtime.install(home, codex_home=Path(td)/'.codex')
+
+            self.assertEqual(result['status'], 'READY')
+            self.assertTrue(marker.exists())
+            self.assertEqual(marker.read_text(encoding='utf-8'), 'keep')
+            self.assertTrue((home/'bin'/'pmbridge').exists())
+
 
 class CliTests(unittest.TestCase):
+    @patch('pmbridge.cli.launchd.load')
+    @patch('pmbridge.cli.launchd.install')
+    @patch('pmbridge.cli.runtime.install')
+    @patch('pmbridge.cli.gitops.ensure_repo')
+    def test_bootstrap_enables_guarded_binding_and_returns_guard(self, ensure_repo, runtime_install, launchd_install, launchd_load):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            ensure_repo.return_value = {'status': 'READY', 'repo': str(home/'demo'), 'created': False}
+            runtime_install.return_value = {'command': str(home/'bin'/'pmbridge')}
+            launchd_install.return_value = home/'launchd.plist'
+            launchd_load.return_value.returncode = 0
+            args = cli.build_parser().parse_args([
+                'bootstrap', '--repo', str(home/'demo'), '--chat-url', 'https://chatgpt.com/c/demo',
+                '--home', str(home), '--json',
+            ])
+
+            result = cli.bootstrap(args)
+
+            self.assertEqual(result['status'], 'READY')
+            self.assertEqual(result['binding_guard']['project'], 'demo')
+            self.assertEqual(result['binding_guard']['binding_version'], 1)
+            self.assertTrue(result['binding_guard']['binding_session'])
+            cfg = cli.config.load_project(home, 'demo')
+            self.assertTrue(cfg['binding_guarded'])
+            self.assertEqual(cfg['binding_session'], result['binding_guard']['binding_session'])
+
+    @patch('pmbridge.cli.spawn_watcher')
+    def test_run_cli_accepts_guard_json_returned_by_takeover(self, spawn):
+        import io
+        import json
+        from contextlib import redirect_stdout
+        spawn.return_value.pid = 42
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            repo = home/'repo'; repo.mkdir()
+            (home/'projects'/'demo').mkdir(parents=True)
+            (home/'projects'/'demo'/'config.json').write_text(json.dumps({
+                'version': 1, 'name': 'demo', 'repo': str(repo),
+                'chat_url': 'https://chatgpt.com/c/demo', 'binding_version': 2,
+                'binding_guarded': True, 'binding_session': 'session-current',
+                'stall_seconds': 1200,
+            }))
+            guard = {'project': 'demo', 'binding_version': 2, 'binding_session': 'session-current'}
+            out = io.StringIO()
+
+            with redirect_stdout(out):
+                rc = cli.main([
+                    'run', 'demo', '--instruction', 'Dispatch normally',
+                    '--binding-guard', json.dumps(guard), '--home', str(home), '--json',
+                ])
+
+            self.assertEqual(rc, 0)
+            self.assertEqual(json.loads(out.getvalue())['status'], 'STARTED')
+
     @patch('pmbridge.cli.spawn_event_drain')
     @patch('pmbridge.cli.events.enqueue_job_event')
     def test_notify_queues_event_and_starts_single_drain(self, enqueue, drain):
@@ -46,6 +117,95 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result['status'], 'STARTED')
             self.assertEqual(result['watcher_pid'], 42)
             self.assertTrue((home/'jobs'/f"{result['job_id']}.json").exists())
+
+    @patch('pmbridge.cli.spawn_watcher')
+    def test_stale_binding_guard_refuses_dispatch_after_rebind(self, spawn):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            repo = home/'repo'; repo.mkdir()
+            (home/'projects'/'demo').mkdir(parents=True)
+            (home/'projects'/'demo'/'config.json').write_text(
+                '{"version":1,"name":"demo","repo":"'+str(repo)+'",'
+                '"chat_url":"https://chatgpt.com/c/old","binding_version":1,'
+                '"binding_guarded":true,"binding_session":"session-old",'
+                '"stall_seconds":1200}')
+
+            from pmbridge import binding
+            binding.rebind(home, 'demo', 'https://chatgpt.com/c/new', source='test')
+            old_guard = {
+                'project': 'demo',
+                'binding_version': 1,
+                'binding_session': 'session-old',
+            }
+
+            result = cli.run_project(home, 'demo', 'Do not dispatch', binding_guard=old_guard)
+
+            self.assertEqual(result['status'], 'BINDING_GUARD_STALE')
+            self.assertTrue(result['rebind_required'])
+            self.assertFalse((home/'jobs').exists())
+            spawn.assert_not_called()
+
+    @patch('pmbridge.cli.spawn_watcher')
+    def test_matching_binding_guard_allows_dispatch(self, spawn):
+        spawn.return_value.pid = 42
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            repo = home/'repo'; repo.mkdir()
+            (home/'projects'/'demo').mkdir(parents=True)
+            (home/'projects'/'demo'/'config.json').write_text(
+                '{"version":1,"name":"demo","repo":"'+str(repo)+'",'
+                '"chat_url":"https://chatgpt.com/c/demo","binding_version":3,'
+                '"binding_guarded":true,"binding_session":"session-current",'
+                '"stall_seconds":1200}')
+
+            from pmbridge import binding
+            current_guard = binding.guard(home, 'demo')
+            with patch('pmbridge.cli.binding.takeover') as takeover, patch('pmbridge.cli.transport_edge.ui_state') as ui_state:
+                result = cli.run_project(home, 'demo', 'Dispatch normally', binding_guard=current_guard)
+
+            self.assertEqual(result['status'], 'STARTED')
+            self.assertEqual(result['watcher_pid'], 42)
+            spawn.assert_called_once()
+            takeover.assert_not_called()
+            ui_state.assert_not_called()
+
+    @patch('pmbridge.cli.spawn_watcher')
+    def test_guarded_project_requires_guard_without_legacy_downgrade(self, spawn):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            repo = home/'repo'; repo.mkdir()
+            (home/'projects'/'demo').mkdir(parents=True)
+            (home/'projects'/'demo'/'config.json').write_text(
+                '{"version":1,"name":"demo","repo":"'+str(repo)+'",'
+                '"chat_url":"https://chatgpt.com/c/demo","binding_version":1,'
+                '"binding_guarded":true,"binding_session":"session-current",'
+                '"stall_seconds":1200}')
+
+            result = cli.run_project(home, 'demo', 'Do not dispatch')
+
+            self.assertEqual(result['status'], 'BINDING_GUARD_REQUIRED')
+            self.assertTrue(result['rebind_required'])
+            self.assertFalse((home/'jobs').exists())
+            spawn.assert_not_called()
+
+    @patch('pmbridge.cli.spawn_watcher')
+    def test_malformed_binding_guard_fails_closed(self, spawn):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            repo = home/'repo'; repo.mkdir()
+            (home/'projects'/'demo').mkdir(parents=True)
+            (home/'projects'/'demo'/'config.json').write_text(
+                '{"version":1,"name":"demo","repo":"'+str(repo)+'",'
+                '"chat_url":"https://chatgpt.com/c/demo","binding_version":1,'
+                '"binding_guarded":true,"binding_session":"session-current",'
+                '"stall_seconds":1200}')
+
+            result = cli.run_project(home, 'demo', 'Do not dispatch', binding_guard='not-json')
+
+            self.assertEqual(result['status'], 'BINDING_GUARD_INVALID')
+            self.assertTrue(result['rebind_required'])
+            self.assertFalse((home/'jobs').exists())
+            spawn.assert_not_called()
 
 
 class OptionalAccessCliTests(unittest.TestCase):

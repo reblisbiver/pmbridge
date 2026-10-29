@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,15 +24,74 @@ def _append_history(path: Path, entry: dict) -> None:
         fh.write(json.dumps(entry, ensure_ascii=False) + '\n')
 
 
+def _binding_version(cfg: dict) -> int:
+    return int(cfg.get('binding_version', 1))
+
+
+def _binding_guard(project: str, cfg: dict) -> dict:
+    return {
+        'project': project,
+        'binding_version': _binding_version(cfg),
+        'binding_session': cfg.get('binding_session'),
+    }
+
+
+def guard(home: Path, project: str) -> dict:
+    """Return the current compact local guard for a project binding."""
+    return _binding_guard(project, config.load_project(home.expanduser(), project))
+
+
+def enable_guard(cfg: dict) -> dict:
+    """Enable guarded dispatch on a project config before its first save."""
+    cfg.setdefault('binding_version', 1)
+    cfg['binding_guarded'] = True
+    cfg['binding_session'] = cfg.get('binding_session') or uuid.uuid4().hex
+    return cfg
+
+
+def validate_guard(home: Path, project: str, expected_guard=None) -> dict:
+    """Validate a dispatch guard using only the durable project config."""
+    cfg = config.load_project(home.expanduser(), project)
+    current = _binding_guard(project, cfg)
+    if not cfg.get('binding_guarded', False):
+        return {'status': 'LEGACY_UNGUARDED', 'guard_required': False}
+    if expected_guard is None:
+        return {
+            'status': 'BINDING_GUARD_REQUIRED',
+            'project': project,
+            'binding_version': current['binding_version'],
+            'rebind_required': True,
+            'message': 'Takeover or rebind is required before dispatching from this conversation.',
+        }
+    if not isinstance(expected_guard, dict):
+        return {
+            'status': 'BINDING_GUARD_INVALID',
+            'project': project,
+            'rebind_required': True,
+            'message': 'The binding guard must be the JSON object returned by takeover or rebind.',
+        }
+    if expected_guard != current:
+        return {
+            'status': 'BINDING_GUARD_STALE',
+            'project': project,
+            'binding_version': current['binding_version'],
+            'rebind_required': True,
+            'message': 'The binding guard is stale or mismatched; takeover or rebind is required.',
+        }
+    return {'status': 'READY', 'guard_required': True}
+
+
 def rebind(home: Path, project: str, new_chat_url: str, source: str = 'manual') -> dict:
     home = home.expanduser()
     cfg = config.load_project(home, project)
     previous = cfg.get('chat_url')
-    old_version = int(cfg.get('binding_version', 1))
+    old_version = _binding_version(cfg)
     new_version = old_version + 1
+    new_session = uuid.uuid4().hex
     changed_at = datetime.now(timezone.utc).isoformat(timespec='seconds')
     entry = {
         'binding_version': new_version,
+        'binding_session': new_session,
         'changed_at': changed_at,
         'source': source,
         'previous_chat_url': previous,
@@ -39,6 +99,8 @@ def rebind(home: Path, project: str, new_chat_url: str, source: str = 'manual') 
     }
     cfg['chat_url'] = new_chat_url
     cfg['binding_version'] = new_version
+    cfg['binding_guarded'] = True
+    cfg['binding_session'] = new_session
     cfg['binding_updated_at'] = changed_at
     config.save_project(home, cfg)
     _append_history(_history_path(home, project), entry)
@@ -47,6 +109,8 @@ def rebind(home: Path, project: str, new_chat_url: str, source: str = 'manual') 
         'project': project,
         'chat_url': new_chat_url,
         'binding_version': new_version,
+        'binding_session': new_session,
+        'binding_guard': _binding_guard(project, cfg),
         'previous_chat_url': previous,
     }
 
@@ -104,8 +168,9 @@ def takeover(home: Path, project: str, recent_limit: int = 8) -> dict:
     scope = chat_url or project
     active_binding = {
         'url': chat_url,
-        'version': int(cfg.get('binding_version', 1)),
+        'version': _binding_version(cfg),
         'updated_at': cfg.get('binding_updated_at'),
+        'guarded': bool(cfg.get('binding_guarded', False)),
     }
     working_state = ledger.load(home, project)
     return {
@@ -135,6 +200,7 @@ def takeover(home: Path, project: str, recent_limit: int = 8) -> dict:
         },
         'runtime': {
             'binding': active_binding,
+            'binding_guard': _binding_guard(project, cfg),
             'callbacks': {'pending': pending},
             'pm_state': pm_state.status(home, scope),
             'edge': {
