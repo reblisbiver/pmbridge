@@ -1,6 +1,6 @@
 # PMBridge setup protocol for ChatGPT
 
-This file is the machine-facing setup contract. Prefer CLI JSON output over inferring behavior from implementation details.
+This file is the machine-facing setup guide. Read `docs/pm-operating-charter.md` first, then prefer CLI JSON output over inferring behavior from implementation details.
 
 ## Purpose
 
@@ -89,7 +89,7 @@ Then inspect `~/.pmbridge/jobs/<job_id>.json` and the matching result file. The 
 
 Unless there is a deliberate reason to override them, use the explicit defaults `gpt-5.6-luna` and `xhigh`. PMBridge always passes both values to Codex; never rely on the user's current Codex UI/config selection.
 
-On callback, independently verify the material claims and target state. Start with `~/.pmbridge/bin/pmbridge inspect <job-id> --json`, which is a compact evidence index: job metadata, final-result preview, git boundaries/diffstat when available, and paths/sizes for raw evidence. Expand into the raw log, full result, diff, tests, artifacts, or other local state whenever they are material, uncertain, contradictory, or otherwise useful. Do not treat the compact packet or a completion callback as acceptance. PMBridge never forbids raw evidence access. Whether to continue, stop, ask the user, or how deeply to audit is determined by the PM from the task and current user authorization; PMBridge imposes no review depth, job-by-job/stage-by-stage approval cadence, context threshold, or automatic handoff.
+On callback, independently verify the material claims and target state. Start with `~/.pmbridge/bin/pmbridge inspect <job-id> --json`, which is a compact evidence index: job metadata, final-result preview, git boundaries/diffstat when available, and paths/sizes for raw evidence. Expand into the raw log, full result, diff, tests, artifacts, or other local state whenever they are material, uncertain, contradictory, or otherwise useful. Do not treat the compact packet or a completion callback as acceptance. PMBridge never forbids raw evidence access. Whether to continue, stop, ask the user, or how deeply to audit is determined by the PM from the task and current user authorization; PMBridge imposes no review depth, job-by-job/stage-by-stage approval cadence, context threshold, or automatic takeover.
 
 
 ## PM interaction / callback queue
@@ -119,7 +119,11 @@ For long-running projects, the PM may externalize its own current working state 
 ~/.pmbridge/bin/pmbridge context <project-name> --json
 ```
 
-Ledger content is entirely PM-controlled; PMBridge does not define required keys or delete chat history. `context` is diagnostic only and does not force compaction, rotation, or handoff.
+Ledger content is entirely PM-controlled; PMBridge does not define required keys or delete chat history. `context` is diagnostic project metrics only and does not force compaction, rotation, or takeover.
+
+## Takeover view
+
+`~/.pmbridge/bin/pmbridge takeover <project-name> --json` is the canonical replacement-PM read view. It separates PM/Supervision, Project, Execution, and Transport & Runtime information while composing the existing durable sources. It does not mutate jobs, callbacks, ledger state, or bindings. `handoff` remains a backwards-compatible flat alias for older setup scripts.
 
 ## GitHub remote rule
 

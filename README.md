@@ -1,8 +1,8 @@
 # PMBridge
 
-PMBridge is a small local supervisor that connects a ChatGPT Web conversation to local Codex execution.
+PMBridge is a small local capability layer that connects a ChatGPT Web PM conversation to local Codex execution.
 
-**ChatGPT plans and reviews. Codex executes locally. PMBridge keeps the job durable and brings status back.**
+**The PM plans, directs, reviews, and reports. Codex executes locally. PMBridge keeps execution durable and brings evidence back.**
 
 This repository is optimized for personal reuse rather than broad compatibility. V0.1 intentionally supports one environment: macOS + Microsoft Edge + ChatGPT Web + Codex.
 
@@ -19,7 +19,20 @@ This repository is optimized for personal reuse rather than broad compatibility.
 - explicitly pins every Codex job to `gpt-5.6-luna` + `xhigh` by default, with per-job overrides;
 - provides `doctor` and real no-op `smoke` checks;
 - exposes compact job evidence with raw evidence always available on demand;
-- stores an optional PM-controlled durable ledger and reports objective context-pressure metrics without forcing handoff or pruning.
+- stores an optional PM-controlled durable ledger and reports diagnostic project metrics without forcing takeover or pruning.
+
+## Architecture
+
+PMBridge has four conceptual layers. They describe where information belongs; they do not impose a PM workflow or authorization policy.
+
+- **PM / Supervision** — the durable PM operating charter and continuity guidance for a high-autonomy PM supervising execution agents.
+- **Project** — project configuration plus the PM-controlled working state. The ledger is arbitrary JSON, so a project may record goals, current state, decisions, focus, blockers, and methodology in the shape that fits its work.
+- **Execution** — Codex jobs, worker roles, targets, model/access/network choices, evidence, results, and job history.
+- **Transport & Runtime** — the active ChatGPT binding, callback queue, Edge delivery guards, watcher ownership, recovery entrypoint, and PM busy/idle delivery protection.
+
+`pmbridge takeover <project> --json` is the canonical read-only view over these layers. It composes existing state; it is not a new state store. `handoff` remains available as a backwards-compatible flat view for older PM conversations and scripts.
+
+PMBridge supplies capability and infrastructure so the PM can exercise judgment. It does not prescribe review depth, approval cadence, job topology, context limits, automatic handoff, or what owner authorization means.
 
 ## Fastest setup: let ChatGPT do it
 
@@ -66,7 +79,8 @@ These are conventions, not fixed roles. The PM can create any role names. `--acc
 ```text
 pmbridge bootstrap   Configure a project and install/update the stable runtime
 pmbridge doctor      Check project, Codex, Edge, ChatGPT tab and supervisor health
-pmbridge handoff     Show durable state for a replacement ChatGPT PM conversation
+pmbridge takeover    Show the canonical four-layer read view for a PM takeover
+pmbridge handoff     Backwards-compatible flat alias for the takeover view
 pmbridge inspect     Show a compact evidence packet for one job; --full-result expands the result text
 pmbridge ledger      Show/replace/patch PM-controlled durable project working state
 pmbridge context     Report objective context-pressure metrics for a project
@@ -90,10 +104,13 @@ PMBridge runtime data is deliberately outside project repositories:
 ├── runtime/pmbridge/
 ├── projects/<name>/config.json
 ├── projects/<name>/pm-ledger.json   # optional, PM-controlled
+├── projects/<name>/bindings/history.jsonl
 ├── jobs/<job-id>.json
 ├── jobs/<job-id>.prompt.txt
 ├── jobs/<job-id>.log
 ├── jobs/<job-id>.result.txt
+├── events/pending/ and events/delivered/
+├── state/pm-state/                  # PM busy/idle delivery state
 └── logs/
 ```
 
@@ -104,11 +121,11 @@ Do not commit runtime state, ChatGPT conversation URLs, job prompts/results or l
 
 A callback is a review trigger, not a requirement to ingest every byte of worker history. Start with `pmbridge inspect <job-id> --json` for deterministic job metadata, final-result preview, git boundaries/diffstat, and raw-evidence paths/sizes. Use `--full-result` or read the referenced raw log/result/artifacts whenever the task actually requires deeper evidence. PMBridge never forbids raw evidence access and never treats the compact packet as acceptance.
 
-`pmbridge ledger show|replace|patch <project>` stores arbitrary JSON chosen by the PM. PMBridge does not impose a ledger schema or decide which project facts should be retained. `pmbridge context <project> --json` reports counts and byte volumes since the current binding when that timestamp is known; it deliberately has no pressure threshold, automatic rotation, or policy recommendation.
+`pmbridge ledger show|replace|patch <project>` stores arbitrary JSON chosen by the PM. PMBridge does not impose a ledger schema or decide which project facts should be retained. `pmbridge context <project> --json` reports diagnostic project metrics such as counts and byte volumes since the current binding when that timestamp is known; it deliberately has no pressure threshold, automatic rotation, or policy recommendation.
 
 ## Existing legacy bridges
 
-Existing project-specific bridges can remain independent. PMBridge does not require migrating them.
+Existing project-specific bridges can remain independent. `compat/pm_context.py` provides a small layer-aware adapter for legacy evidence/ledger views; PMBridge does not migrate their state or execution modes.
 
 ## Codex permission profiles
 
@@ -117,4 +134,4 @@ Bootstrap installs namespaced local and internet Codex profiles under `$CODEX_HO
 
 ## Moving to a new ChatGPT conversation
 
-When the PM conversation fills its context window, do not create a new bridge. In the new ChatGPT conversation, read `CHATGPT_SETUP.md`, then run `pmbridge handoff <project> --json` to inspect the durable state and `pmbridge rebind <project> --chat-bind-text ... --json` to make the new conversation the single active callback destination. Running jobs and pending callbacks are preserved.
+When the PM conversation fills its context window, do not create a new bridge. In the new ChatGPT conversation, read `docs/pm-operating-charter.md` and `CHATGPT_SETUP.md`, then run `pmbridge takeover <project> --json` to inspect the four layers. Use `pmbridge handoff <project> --json` only for older consumers. Then run `pmbridge rebind <project> --chat-bind-text ... --json` to make the new conversation the single active callback destination. Running jobs and pending callbacks are preserved.
