@@ -205,6 +205,11 @@ def build_parser():
     ho.add_argument('--home')
     ho.add_argument('--json', action='store_true')
 
+    to = sub.add_parser('takeover')
+    to.add_argument('project')
+    to.add_argument('--home')
+    to.add_argument('--json', action='store_true')
+
     ins = sub.add_parser('inspect')
     ins.add_argument('job_id')
     ins.add_argument('--full-result', action='store_true')
@@ -290,6 +295,10 @@ def main(argv=None):
         return 0 if result.get('status') == 'READY' else 5
     if args.command == 'handoff':
         result = binding.handoff(home, args.project)
+        emit(result, args.json)
+        return 0
+    if args.command == 'takeover':
+        result = binding.takeover(home, args.project)
         emit(result, args.json)
         return 0
     if args.command == 'inspect':

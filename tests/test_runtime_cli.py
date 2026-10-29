@@ -122,6 +122,26 @@ class RebindCliTests(unittest.TestCase):
         self.assertEqual(args.project, 'demo')
         self.assertTrue(args.json)
 
+    def test_takeover_parser(self):
+        args = cli.build_parser().parse_args(['takeover','demo','--json'])
+        self.assertEqual(args.command, 'takeover')
+        self.assertEqual(args.project, 'demo')
+        self.assertTrue(args.json)
+
+    @patch('pmbridge.cli.binding.takeover')
+    def test_takeover_main_uses_canonical_read_model(self, takeover):
+        import io
+        import json
+        from contextlib import redirect_stdout
+        takeover.return_value = {'status':'READY','project':{'name':'demo'},'supervision':{},'execution':{},'runtime':{}}
+        with tempfile.TemporaryDirectory() as td:
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc = cli.main(['takeover','demo','--home',td,'--json'])
+            self.assertEqual(rc, 0)
+            self.assertEqual(json.loads(out.getvalue())['project']['name'], 'demo')
+            takeover.assert_called_once_with(Path(td).resolve(), 'demo')
+
     @patch('pmbridge.cli.doctor.check')
     @patch('pmbridge.cli.binding.rebind')
     @patch('pmbridge.cli.transport_edge.find_chat_by_texts')

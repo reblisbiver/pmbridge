@@ -65,9 +65,12 @@ def enqueue_job_event(home: Path, job_id: str, status_text: str) -> dict:
     return event
 
 
-def pending_events(home: Path):
+def pending_events(home: Path, create: bool = True):
     pending, _ = _dirs(home)
-    pending.mkdir(parents=True, exist_ok=True)
+    if create:
+        pending.mkdir(parents=True, exist_ok=True)
+    if not pending.exists():
+        return []
     result = []
     for path in sorted(pending.glob('*.json')):
         try:
