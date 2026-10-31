@@ -7,6 +7,11 @@ from pmbridge import transport_edge
 
 
 class EdgeTransportTests(unittest.TestCase):
+    def test_chatgpt_placeholder_is_not_a_busy_composer(self):
+        self.assertFalse(transport_edge.is_real_composer_text("Ask ChatGPT"))
+        self.assertFalse(transport_edge.is_real_composer_text(""))
+        self.assertTrue(transport_edge.is_real_composer_text("a user draft"))
+
     def test_template_is_generic_background_and_busy_composer_safe(self):
         s = transport_edge.SCRIPT.read_text(encoding='utf-8')
         self.assertIn('BUSY_COMPOSER', s)
@@ -16,6 +21,7 @@ class EdgeTransportTests(unittest.TestCase):
         self.assertNotIn('requestSubmit', s)
         self.assertIn('repeat with sendAttempt from 1 to 1', s)
         self.assertIn('if URL of t is targetURL', s)
+        self.assertIn('[aria-label=\\\"Ask ChatGPT\\\"]', s)
         self.assertIn('PM_CHAT_URL is required', s)
         self.assertNotIn('https://chatgpt.com/c/', s)
         self.assertNotIn('/Users/', s)
@@ -36,6 +42,18 @@ class EdgeTransportTests(unittest.TestCase):
         env = run.call_args.kwargs['env']
         self.assertEqual(env['PM_CHAT_URL'], 'https://chatgpt.com/c/demo')
         self.assertTrue(env['PM_BRIDGE_LOG_DIR'].endswith('/logs'))
+
+    @patch('pmbridge.transport_edge.subprocess.run')
+    def test_ui_state_targets_chatgpt_composer_not_editable_code_blocks(self, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = '{"reachable":true,"composer_text":"","composer_placeholder":"Ask ChatGPT","composer_nonempty":false,"generating":false}'
+        run.return_value.stderr = ''
+
+        result = transport_edge.ui_state('https://chatgpt.com/c/demo')
+
+        self.assertFalse(result['composer_nonempty'])
+        script = run.call_args.kwargs['input']
+        self.assertIn('[aria-label=\\\\\\"Ask ChatGPT\\\\\\"]', script)
 
 if __name__ == '__main__':
     unittest.main()

@@ -100,7 +100,10 @@ pmbridge notify      Queue a short job status for the configured ChatGPT convers
 pmbridge drain       Drain queued PM events when PM/UI are idle
 pmbridge pm          Set/read PM busy state
 pmbridge watch       Internal watcher command
+pmbridge relay       Manage the stock Desktop Relay + Secure MCP Tunnel runtime
 ```
+
+The relay operator surface is `pmbridge relay status|doctor|start|stop|restart` plus `pmbridge relay autostart enable|status|disable`. Runtime credentials are read from macOS Keychain at launch; see [`docs/PMBRIDGE_RELAY_RUNBOOK.md`](docs/PMBRIDGE_RELAY_RUNBOOK.md).
 
 ## State
 

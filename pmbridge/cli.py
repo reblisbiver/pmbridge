@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from . import binding, config, context_pressure, doctor, events, evidence, executor, gitops, jobs, launchd, ledger, pm_state, recovery, runtime, state, transport_edge, watcher
+from . import binding, config, context_pressure, doctor, events, evidence, executor, gitops, jobs, launchd, ledger, pm_state, recovery, relay_runtime, runtime, state, transport_edge, watcher
 
 
 def emit(payload, as_json):
@@ -244,6 +244,31 @@ def build_parser():
     pb = psub.add_parser('busy'); pb.add_argument('project', nargs='?'); pb.add_argument('--reason', default='supervisor_work'); pb.add_argument('--minutes', type=int, default=30); pb.add_argument('--home'); pb.add_argument('--json', action='store_true')
     pi = psub.add_parser('idle'); pi.add_argument('project', nargs='?'); pi.add_argument('--home'); pi.add_argument('--json', action='store_true')
     ps = psub.add_parser('status'); ps.add_argument('project', nargs='?'); ps.add_argument('--home'); ps.add_argument('--json', action='store_true')
+
+    rr = sub.add_parser('relay')
+    rsub = rr.add_subparsers(dest='relay_command', required=True)
+    for relay_command in ('status', 'doctor', 'start', 'stop', 'restart'):
+        rparser = rsub.add_parser(relay_command)
+        rparser.add_argument('--home')
+        rparser.add_argument('--json', action='store_true')
+    configure = rsub.add_parser('configure')
+    configure.add_argument('--source-config', required=True, type=Path)
+    configure.add_argument('--tunnel-binary', required=True, type=Path)
+    configure.add_argument('--profile', default='relay-http')
+    configure.add_argument('--profile-dir', required=True, type=Path)
+    configure.add_argument('--health-addr', default='127.0.0.1:18080')
+    configure.add_argument('--home')
+    configure.add_argument('--json', action='store_true')
+    supervisor = rsub.add_parser('supervisor')
+    supervisor.add_argument('--home', required=True)
+    supervisor.add_argument('--config', type=Path)
+    supervisor.add_argument('--json', action='store_true')
+    apst = rsub.add_parser('autostart')
+    asub = apst.add_subparsers(dest='autostart_command', required=True)
+    for autostart_command in ('enable', 'status', 'disable'):
+        aparser = asub.add_parser(autostart_command)
+        aparser.add_argument('--home')
+        aparser.add_argument('--json', action='store_true')
     return ap
 
 
@@ -354,6 +379,23 @@ def main(argv=None):
         else: result = pm_state.status(home, scope=scope)
         emit(result, args.json)
         return 0
+    if args.command == 'relay':
+        action = args.relay_command
+        if action == 'supervisor':
+            return relay_runtime.cli_supervise(home)
+        if action == 'configure':
+            result = relay_runtime.configure_from_source(home, args.source_config, args.tunnel_binary, args.profile, args.profile_dir, args.health_addr)
+        elif action == 'autostart':
+            if args.autostart_command == 'enable':
+                result = launchd.relay_enable(home)
+            elif args.autostart_command == 'disable':
+                result = launchd.relay_disable(home)
+            else:
+                result = launchd.relay_status()
+        else:
+            result = relay_runtime.cli_runtime(home, action)
+        emit(result, args.json)
+        return 0 if result.get('status') in {'READY', 'STARTED', 'STOPPED', 'ALREADY_RUNNING', 'ENABLED', 'DISABLED'} else 5
     if args.command == 'watch':
         code = watcher.attach_job(home, args.job_id) if args.attach else watcher.run_job(home, args.job_id)
         if args.json:

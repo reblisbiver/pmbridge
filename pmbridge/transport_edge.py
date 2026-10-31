@@ -6,6 +6,12 @@ import time
 from pathlib import Path
 
 SCRIPT = Path(__file__).with_name('edge_notify.sh')
+COMPOSER_PLACEHOLDERS = {'Ask ChatGPT'}
+
+
+def is_real_composer_text(value: str) -> bool:
+    text = (value or '').strip()
+    return bool(text) and text not in COMPOSER_PLACEHOLDERS
 
 
 def send(chat_url: str, message: str, home: Path) -> dict:
@@ -129,7 +135,7 @@ def ui_state(chat_url: str, timeout: float = 4.0) -> dict:
       repeat with t in tabs of w
         if URL of t is targetURL then
           try
-            set js to "(()=>{const c=document.querySelector('[contenteditable=\\\"true\\\"][role=\\\"textbox\\\"]');const composer=(c?.innerText||'').trim();const stop=[...document.querySelectorAll('button')].some(b=>{const a=(b.getAttribute('aria-label')||'').trim();return a==='Stop'||/^Stop (generating|streaming|responding)$/i.test(a)||b.dataset?.testid==='stop-button'});const main=document.querySelector('main');const tail=(main?.innerText||document.body.innerText||'').slice(-500);const signature=[tail,composer,stop?'1':'0'].join('|');return JSON.stringify({reachable:true,composer_nonempty:!!composer,generating:stop,signature,visibility:document.visibilityState,focused:document.hasFocus()});})()"
+            set js to "(()=>{const c=document.querySelector('[contenteditable=\\\"true\\\"][role=\\\"textbox\\\"][aria-label=\\\"Ask ChatGPT\\\"]');const composer=(c?.innerText||'').trim();const placeholder=(c?.getAttribute('aria-placeholder')||c?.getAttribute('data-placeholder')||'').trim();const stop=[...document.querySelectorAll('button')].some(b=>{const a=(b.getAttribute('aria-label')||'').trim();return a==='Stop'||/^Stop (generating|streaming|responding)$/i.test(a)||b.dataset?.testid==='stop-button'});const main=document.querySelector('main');const tail=(main?.innerText||document.body.innerText||'').slice(-500);const signature=[tail,composer,stop?'1':'0'].join('|');return JSON.stringify({reachable:true,composer_text:composer,composer_placeholder:placeholder,composer_nonempty:!!composer,generating:stop,signature,visibility:document.visibilityState,focused:document.hasFocus()});})()"
             return execute t javascript js
           on error errMsg
             return "{\"reachable\":false,\"reason\":\"js_error\"}"
@@ -146,6 +152,11 @@ end run'''
         return {'reachable': False, 'reason': 'timeout'}
     text = (proc.stdout or '').strip()
     try:
-        return json.loads(text)
+        result = json.loads(text)
+        result['composer_nonempty'] = (
+            is_real_composer_text(result.get('composer_text', ''))
+            and result.get('composer_text', '') != result.get('composer_placeholder', '')
+        )
+        return result
     except Exception:
         return {'reachable': False, 'reason': 'invalid_probe'}
