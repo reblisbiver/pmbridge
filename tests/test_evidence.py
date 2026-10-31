@@ -31,6 +31,67 @@ class EvidenceTests(unittest.TestCase):
             j=jobs.create_job(h,'p',repo,'x')
             self.assertEqual(j['start_head'],head)
 
+    def test_inspect_reports_uncommitted_working_tree_changes_separately(self):
+        with tempfile.TemporaryDirectory() as td:
+            h=Path(td); repo=h/'repo'; repo.mkdir()
+            subprocess.run(['git','init','-q',str(repo)],check=True)
+            subprocess.run(['git','-C',str(repo),'config','user.email','a@b.c'],check=True)
+            subprocess.run(['git','-C',str(repo),'config','user.name','T'],check=True)
+            (repo/'calculator.py').write_text('def add(a,b): return a+b\n')
+            (repo/'test_calculator.py').write_text('assert True\n')
+            subprocess.run(['git','-C',str(repo),'add','.'],check=True)
+            subprocess.run(['git','-C',str(repo),'commit','-qm','baseline'],check=True)
+            job=jobs.create_job(h,'p',repo,'x')
+            (repo/'calculator.py').write_text('def add(a,b): return a-b\n')
+            (repo/'test_calculator.py').write_text('assert add(1,2)==3\n')
+
+            packet=evidence.inspect_job(h,job['job_id'])
+
+            self.assertEqual(packet['git']['changed_files'], [])
+            self.assertEqual(packet['git']['working_tree']['changed_files'], ['calculator.py','test_calculator.py'])
+            self.assertEqual(packet['git']['working_tree']['changed_file_count'], 2)
+            self.assertFalse(packet['git']['working_tree']['clean'])
+
+    def test_inspect_reports_clean_working_tree_as_zero_changes(self):
+        with tempfile.TemporaryDirectory() as td:
+            h=Path(td); repo=h/'repo'; repo.mkdir()
+            subprocess.run(['git','init','-q',str(repo)],check=True)
+            subprocess.run(['git','-C',str(repo),'config','user.email','a@b.c'],check=True)
+            subprocess.run(['git','-C',str(repo),'config','user.name','T'],check=True)
+            (repo/'calculator.py').write_text('def add(a,b): return a+b\n')
+            subprocess.run(['git','-C',str(repo),'add','.'],check=True)
+            subprocess.run(['git','-C',str(repo),'commit','-qm','baseline'],check=True)
+            job=jobs.create_job(h,'p',repo,'x')
+
+            packet=evidence.inspect_job(h,job['job_id'])
+
+            self.assertTrue(packet['git']['working_tree']['clean'])
+            self.assertEqual(packet['git']['working_tree']['changed_files'], [])
+            self.assertEqual(packet['git']['working_tree']['changed_file_count'], 0)
+
+    def test_inspect_preserves_committed_change_summary(self):
+        with tempfile.TemporaryDirectory() as td:
+            h=Path(td); repo=h/'repo'; repo.mkdir()
+            subprocess.run(['git','init','-q',str(repo)],check=True)
+            subprocess.run(['git','-C',str(repo),'config','user.email','a@b.c'],check=True)
+            subprocess.run(['git','-C',str(repo),'config','user.name','T'],check=True)
+            (repo/'calculator.py').write_text('def add(a,b): return a+b\n')
+            subprocess.run(['git','-C',str(repo),'add','.'],check=True)
+            subprocess.run(['git','-C',str(repo),'commit','-qm','baseline'],check=True)
+            job=jobs.create_job(h,'p',repo,'x')
+            (repo/'calculator.py').write_text('def add(a,b): return a-b\n')
+            subprocess.run(['git','-C',str(repo),'add','.'],check=True)
+            subprocess.run(['git','-C',str(repo),'commit','-qm','worker-change'],check=True)
+            end_head=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()
+            job['end_head']=end_head
+            state.write_job(h/'jobs'/f"{job['job_id']}.json",job)
+
+            packet=evidence.inspect_job(h,job['job_id'])
+
+            self.assertEqual(packet['git']['changed_files'], ['calculator.py'])
+            self.assertEqual(packet['git']['changed_file_count'], 1)
+            self.assertTrue(packet['git']['working_tree']['clean'])
+
     def test_large_result_is_previewed_but_full_result_remains_available(self):
         with tempfile.TemporaryDirectory() as td:
             h=Path(td); (h/'jobs').mkdir(); repo=h/'repo'; repo.mkdir(); big='R'*20000

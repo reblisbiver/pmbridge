@@ -6,6 +6,14 @@ from . import codex_profiles
 APP_CODEX = Path('/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex')
 DEFAULT_MODEL = 'gpt-5.6-luna'
 DEFAULT_REASONING_EFFORT = 'high'
+SUPPORTED_REASONING_EFFORTS = ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max')
+
+
+def validate_reasoning_effort(value: str) -> str:
+    if value not in SUPPORTED_REASONING_EFFORTS:
+        supported = ', '.join(SUPPORTED_REASONING_EFFORTS)
+        raise ValueError(f'unsupported reasoning effort: {value}; supported values: {supported}')
+    return value
 
 
 def find_codex() -> Path:
@@ -32,6 +40,7 @@ def build_codex_command(
         raise ValueError(f'unsupported network mode: {network}')
     if network in {'local', 'internet'} and access is None:
         raise ValueError(f'network={network} requires explicit access read|write because the network profile also defines filesystem policy')
+    validate_reasoning_effort(reasoning_effort)
     binary = codex or find_codex()
     cmd = [
         str(binary), 'exec',

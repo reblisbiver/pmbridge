@@ -4,7 +4,7 @@ from pathlib import Path
 
 from . import state
 from . import evidence
-from .executor import DEFAULT_MODEL, DEFAULT_REASONING_EFFORT
+from .executor import DEFAULT_MODEL, DEFAULT_REASONING_EFFORT, validate_reasoning_effort
 
 
 def tag_instruction(job_id: str, instruction: str, role: str = 'worker', access: str = None, target=None) -> str:
@@ -39,6 +39,7 @@ def create_job(
         raise ValueError(f'network={network} requires explicit access read|write because the network profile also defines filesystem policy')
     if network not in {None, 'none', 'local', 'internet'}:
         raise ValueError(f'unsupported network mode: {network}')
+    validate_reasoning_effort(reasoning_effort)
     job_id = str(uuid.uuid4())
     jobs_dir = home.expanduser() / 'jobs'
     jobs_dir.mkdir(parents=True, exist_ok=True)

@@ -61,12 +61,53 @@ def _git_diff(repo, start_head, end_head, changed_file_limit=DEFAULT_CHANGED_FIL
         return base
 
 
+def _git_working_tree(repo, changed_file_limit=DEFAULT_CHANGED_FILE_LIMIT):
+    base = {
+        'clean': None,
+        'changed_files': [],
+        'changed_file_count': None,
+        'changed_files_truncated': False,
+        'diffstat': None,
+    }
+    if not repo:
+        return base
+    try:
+        status = subprocess.run(
+            ['git', '-C', str(repo), 'status', '--porcelain=v1', '--untracked-files=all'],
+            capture_output=True, text=True, timeout=10,
+        )
+        if status.returncode != 0:
+            return base
+        files = []
+        for line in status.stdout.splitlines():
+            if len(line) < 4:
+                continue
+            path = line[3:]
+            if ' -> ' in path:
+                path = path.rsplit(' -> ', 1)[1]
+            files.append(path)
+        stat = subprocess.run(
+            ['git', '-C', str(repo), 'diff', 'HEAD', '--stat'],
+            capture_output=True, text=True, timeout=10,
+        )
+        return {
+            'clean': not files,
+            'changed_files': files[:changed_file_limit],
+            'changed_file_count': len(files),
+            'changed_files_truncated': len(files) > changed_file_limit,
+            'diffstat': stat.stdout.strip() or None if stat.returncode == 0 else None,
+        }
+    except (OSError, subprocess.SubprocessError):
+        return base
+
+
 def inspect_job(home: Path, job_id: str, full_result: bool = False) -> dict:
     home = home.expanduser()
     job = state.load_job(home/'jobs'/f'{job_id}.json')
     log = _file_meta(job.get('output_file'))
     result = _result_view(job.get('result_file'), full_result=full_result)
     git = _git_diff(job.get('repo'), job.get('start_head'), job.get('end_head'))
+    git['working_tree'] = _git_working_tree(job.get('repo'))
     metadata_keys = ('job_id','project','role','status','target','access','network','model','reasoning_effort','started_at','finished_at','exit_code','pid','watcher_pid')
     return {
         'status': 'READY',

@@ -45,6 +45,23 @@ class ExecutionPolicyTests(unittest.TestCase):
             executor.build_codex_command(
                 Path('/tmp/repo'), Path('/tmp/result'), access=None, network='local', codex=Path('/tmp/codex'))
 
+    def test_unsupported_reasoning_effort_is_rejected_before_codex_command(self):
+        with self.assertRaisesRegex(ValueError, 'unsupported reasoning effort: extra-high'):
+            executor.build_codex_command(
+                Path('/tmp/repo'), Path('/tmp/result'), reasoning_effort='extra-high', codex=Path('/tmp/codex'))
+
+    def test_create_job_rejects_unsupported_reasoning_effort(self):
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(ValueError, 'unsupported reasoning effort: extra-high'):
+                jobs.create_job(Path(td), 'demo', Path('/tmp/repo'), 'Audit it', reasoning_effort='extra-high')
+
+    def test_cli_reasoning_effort_boundary_is_explicit(self):
+        parser = cli.build_parser()
+        accepted = parser.parse_args(['run', 'demo', '--instruction', 'Audit it', '--reasoning-effort', 'high'])
+        self.assertEqual(accepted.reasoning_effort, 'high')
+        with self.assertRaises(SystemExit):
+            parser.parse_args(['run', 'demo', '--instruction', 'Audit it', '--reasoning-effort', 'extra-high'])
+
 
     def test_omitted_network_does_not_impose_network_policy(self):
         cmd = executor.build_codex_command(

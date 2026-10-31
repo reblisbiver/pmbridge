@@ -167,7 +167,7 @@ def build_parser():
     rp.add_argument('--network', choices=['none','local','internet'])
     rp.add_argument('--target')
     rp.add_argument('--model', default=executor.DEFAULT_MODEL)
-    rp.add_argument('--reasoning-effort', default=executor.DEFAULT_REASONING_EFFORT)
+    rp.add_argument('--reasoning-effort', choices=executor.SUPPORTED_REASONING_EFFORTS, default=executor.DEFAULT_REASONING_EFFORT)
     rp.add_argument('--binding-guard')
     rp.add_argument('--home')
     rp.add_argument('--json', action='store_true')
