@@ -14,7 +14,7 @@ Replace the paid Remote Desktop Commander transport for PM/agent work with a sta
 - Do not continue the Cloudflare/domain path unless a future requirement specifically needs a public hostname.
 - Do not fork Desktop Relay preemptively.
 - Do not add unrelated Commander Plus capabilities (browser automation, mission orchestration, GUI control, SQLite DAGs, video/OCR, knowledge graph, etc.).
-- WIP=1 for acceptance/productionization tasks.
+- WIP=1 for productionization tasks.
 
 ## Accepted evidence
 
@@ -32,64 +32,61 @@ Real path exercised:
 
 `ChatGPT custom MCP -> OpenAI Secure MCP Tunnel -> tunnel-client -> Desktop Relay -> Desktop Commander -> Mac`
 
-All eight acceptance cases passed:
-
-1. ChatGPT connection/tool discovery.
-2. Harmless command execution.
-3. Filesystem read.
-4. 60+ second long-running command without replay.
-5. Large result paging and exact recovery.
-6. Process start/inspect/terminate lifecycle.
-7. Desktop Commander child kill/recovery through the new path.
-8. Unauthorized/invalid requests rejected while the relay remained loopback-only.
-
-Additional manual recheck in a later ChatGPT turn returned exact stdout for:
-
-`printf 'manual-test-ok\n'`
+All eight transport acceptance cases passed, including long-running commands, large-result paging, process lifecycle, Desktop Commander child recovery, and unauthorized-request rejection. A later manual recheck returned exact stdout for `printf 'manual-test-ok\n'`.
 
 No Cloudflare hostname, public DNS, LAN listener, or paid Remote Desktop Commander transport was required.
 
+### Issue #4 — PMBridge production path: ACCEPT
+
+Real business path exercised:
+
+`ChatGPT -> OpenAI Secure MCP Tunnel -> Desktop Relay -> Desktop Commander -> PMBridge -> Codex worker -> callback -> ChatGPT`
+
+Accepted evidence:
+
+- Exactly one disposable worker dispatched: `d333a057-53a5-46b1-b516-36421bd0d083`.
+- Worker completed with exit code `0`.
+- Structured result and disposable marker were verified through the new relay.
+- Completion callback was visibly received in the bound ChatGPT conversation.
+- PMBridge HEAD remained unchanged; tracked source was not modified.
+- IO Job Hunter was not modified.
+- Paid Remote Desktop Commander was not used.
+- PMBridge returned to idle after the run.
+
+Operational note: a manual `pmbridge drain --json` observation returned `LOCKED, delivered=0, pending=1` after the callback had already arrived through the active bound session. This did not invalidate acceptance and caused no duplicate dispatch. Treat it as a Phase 2 operability/observability check: only escalate to a product bug if it is reproducible as callback loss, queue wedging, or duplicate delivery.
+
 ## Current implemented state
 
-- Desktop Relay is reachable at loopback only.
+- Core transport feasibility: complete.
+- Real ChatGPT connector acceptance: complete.
+- Real PMBridge worker lifecycle acceptance: complete.
+- Desktop Relay remains loopback-only.
 - Secure MCP Tunnel is functional.
 - `openai/tunnel-client v0.0.19` is functional.
-- Relay upstream is running.
 - ChatGPT app `PMBridge Desktop Relay` is connected and callable.
-- Credentials were kept out of chat/GitHub evidence; runtime key stored locally with restricted file permissions during acceptance.
-- No upstream Desktop Relay source modification is required for the proven path.
+- No upstream Desktop Relay source fork is required.
+- Production readiness is approximately 95%+: remaining work is zero-touch startup/recovery and operational hardening, not core capability development.
 
-## Remaining work
-
-### Phase 1 — PMBridge production acceptance
-
-Goal: prove the real PM workload over the new path, not just generic Desktop Commander operations.
-
-Required lifecycle:
-
-`pm_context inspect -> relay/check -> dispatch_role -> Codex worker -> callback -> inspect result`
-
-Acceptance rule: one disposable, non-product-destructive worker lifecycle completes entirely through `PMBridge Desktop Relay`, with the callback/result verified and no use of the paid Remote Desktop Commander transport.
-
-If this passes, the new transport is accepted for IO Job Hunter / PMBridge production use.
+## Remaining work — Phase 2 only
 
 ### Phase 2 — zero-touch productionization
 
-Goal: make normal use operationally boring.
+Goal: make normal use operationally boring and require no routine terminal work after macOS login.
 
-Desired operator surface, inspired by the mature production wrapper in Commander Plus but without copying its unrelated feature set:
+Required operator outcomes:
 
-- status / doctor
-- start / stop / restart
-- autostart enable / status / disable
-- secure runtime-key storage (prefer macOS Keychain if practical)
-- launchd startup for relay + tunnel-client
+- `status / doctor`
+- `start / stop / restart`
+- `autostart enable / status / disable`
+- secure runtime-key storage, preferably macOS Keychain if practical
+- launchd startup for Desktop Relay + tunnel-client
 - crash/reconnect recovery
 - pinned known-good upstream/runtime versions
 - simple rollback/update procedure
 - one-page recovery/runbook
+- classify the observed `drain LOCKED, pending=1` state and prove it cannot cause callback loss/duplication under normal operation
 
-Do not build this layer until Phase 1 passes. Reuse upstream Desktop Relay launch/recovery mechanisms where possible and copy/adapt only the minimum proven patterns needed from existing projects.
+Reuse upstream Desktop Relay launch/recovery mechanisms where possible. Borrow only the minimal proven operational patterns from Commander Plus. Do not rebuild the relay or expand into a general workstation platform.
 
 ## Reference-project comparison
 
@@ -99,14 +96,14 @@ Use as the core base. It already provides the remote-MCP termination/session mod
 
 ### Commander Plus
 
-Do not adopt as the core product. It is a much larger local AI workstation/control plane with many capabilities outside scope. Its relevant reference value is the production wrapper around OpenAI Secure MCP Tunnel: Keychain-backed tunnel credential handling, `connect/status/doctor/autostart` controls, and stable launchers. Borrow only those operational patterns if they materially reduce maintenance.
+Do not adopt as the core product. Its relevant reference value is the production wrapper around OpenAI Secure MCP Tunnel: Keychain-backed tunnel credential handling, `connect/status/doctor/autostart` controls, stable launchers, and operational recovery conventions. Borrow only those patterns that materially reduce maintenance.
 
 ## Hard constraints
 
-- Do not modify IO Job Hunter merely to make relay acceptance pass.
-- Do not modify PMBridge product logic merely to make relay acceptance pass.
+- Do not modify IO Job Hunter for relay productionization.
+- Do not alter PMBridge product logic unless a reproducible PMBridge defect is captured first.
 - Do not expose a raw public/LAN Desktop Relay listener.
-- Do not put live secrets in GitHub, chat, screenshots, or committed files.
+- Do not put live secrets in GitHub, chat, screenshots, shell history, or committed files.
 - Do not broaden scope into a general workstation/automation platform.
 - Prefer evidence over redesign; patch only real observed defects.
 
@@ -114,7 +111,8 @@ Do not adopt as the core product. It is a much larger local AI workstation/contr
 
 The project is complete when:
 
-1. A full PMBridge worker lifecycle passes over the new transport.
-2. Normal startup/recovery requires no routine manual terminal work beyond exceptional maintenance.
-3. There is a documented status/repair/rollback path.
-4. Paid Remote Desktop Commander is no longer needed for routine PMBridge operation, though it may remain as a temporary fallback until the productionized path has proven stable in normal use.
+1. Normal startup/recovery requires no routine manual terminal work after login.
+2. There is a documented status/repair/rollback path.
+3. Restart/reconnect behavior is verified for relay, tunnel-client, and PMBridge callback flow.
+4. The observed drain lock state is classified and shown not to threaten callback correctness, or fixed if it is a real defect.
+5. Paid Remote Desktop Commander is no longer needed for routine PMBridge operation.
