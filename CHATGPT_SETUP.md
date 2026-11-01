@@ -166,8 +166,9 @@ Do not reconstruct PMBridge internals from memory. Always prefer the installed C
 When this ChatGPT conversation is approaching its context limit, start a new ChatGPT conversation rather than rebuilding PMBridge. In the new conversation:
 
 1. Read `docs/pm-operating-charter.md`, then this file.
-2. Run `~/.pmbridge/bin/pmbridge takeover <project-name> --json` to load the four-layer durable read view. The older `handoff` command remains a backwards-compatible alias.
-3. Rebind the project using two distinctive recent user-message fragments from the **new** conversation:
+2. Run `~/.pmbridge/bin/pmbridge projects list --json` first and identify the intended project from PMBridge's registered project list. Do not begin by scanning the filesystem for a repo. Filesystem search is a fallback only when the registered project list contains no plausible match.
+3. Run `~/.pmbridge/bin/pmbridge takeover <project-name> --json` to load the four-layer durable read view. The older `handoff` command remains a backwards-compatible alias.
+4. Rebind the project using two distinctive recent user-message fragments from the **new** conversation:
 
 ```bash
 ~/.pmbridge/bin/pmbridge rebind <project-name> \

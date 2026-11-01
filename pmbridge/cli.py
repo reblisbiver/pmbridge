@@ -239,6 +239,12 @@ def build_parser():
         source.add_argument('--file', type=Path)
         lp.add_argument('--home'); lp.add_argument('--json', action='store_true')
 
+    projects = sub.add_parser('projects')
+    project_sub = projects.add_subparsers(dest='projects_command', required=True)
+    project_list = project_sub.add_parser('list')
+    project_list.add_argument('--home')
+    project_list.add_argument('--json', action='store_true')
+
     pp = sub.add_parser('pm')
     psub = pp.add_subparsers(dest='pm_command', required=True)
     pb = psub.add_parser('busy'); pb.add_argument('project', nargs='?'); pb.add_argument('--reason', default='supervisor_work'); pb.add_argument('--minutes', type=int, default=30); pb.add_argument('--home'); pb.add_argument('--json', action='store_true')
@@ -363,6 +369,11 @@ def main(argv=None):
                 if not isinstance(data, dict):
                     raise ValueError('ledger patch --data/--file must contain a JSON object')
                 result = ledger.patch(home, args.project, data)
+        emit(result, args.json)
+        return 0
+    if args.command == 'projects':
+        projects = config.list_projects(home)
+        result = {'status': 'READY', 'count': len(projects), 'projects': projects}
         emit(result, args.json)
         return 0
     if args.command == 'pm':
