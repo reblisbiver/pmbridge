@@ -20,7 +20,7 @@ class EdgeTransportTests(unittest.TestCase):
         self.assertIn("b.click();return 'RESUBMITTED'", s)
         self.assertNotIn('requestSubmit', s)
         self.assertIn('repeat with sendAttempt from 1 to 1', s)
-        self.assertIn('if URL of t is targetURL', s)
+        self.assertIn('if URL of t starts with targetURL', s)
         self.assertIn('[aria-label=\\\"Ask ChatGPT\\\"]', s)
         self.assertIn('PM_CHAT_URL is required', s)
         self.assertNotIn('https://chatgpt.com/c/', s)

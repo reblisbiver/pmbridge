@@ -44,11 +44,8 @@ class RelayRuntimeTests(unittest.TestCase):
             self.assertNotIn("api-secret", encoded)
             self.assertNotIn("bearer-secret", encoded)
 
-    @patch("pmbridge.relay_runtime.subprocess.Popen")
-    def test_start_is_idempotent_when_supervisor_is_alive(self, popen):
-        import os
-
-        popen.return_value.pid = os.getpid()
+    @patch("pmbridge.relay_runtime.launchd.relay_enable")
+    def test_start_uses_launchd_as_the_only_supervisor_owner(self, enable):
         with tempfile.TemporaryDirectory() as td:
             home = Path(td) / ".pmbridge"
             runtime = relay_runtime.RelayRuntime(
@@ -56,12 +53,64 @@ class RelayRuntimeTests(unittest.TestCase):
                 relay_runtime.RelayConfig(home=home, relay_command=["/bin/relay"], tunnel_command=["/bin/tunnel"]),
                 keychain=relay_runtime.MemoryKeychain({"control-plane": "api-secret", "relay-auth": "bearer-secret"}),
             )
-            first = runtime.start()
-            second = runtime.start()
+            enable.return_value = {"status": "ENABLED", "label": "com.pmbridge.relay"}
+            with patch.object(runtime, "_owned_processes", return_value=[]), patch.object(runtime, "_wait_for_ready", return_value=True):
+                first = runtime.start()
 
-            self.assertEqual(first["status"], "STARTED")
-            self.assertEqual(second["status"], "ALREADY_RUNNING")
-            self.assertEqual(popen.call_count, 1)
+            self.assertEqual(first["status"], "READY")
+            enable.assert_called_once_with(home.resolve())
+
+    @patch("pmbridge.relay_runtime.launchd.relay_enable")
+    @patch("pmbridge.relay_runtime.launchd.relay_disable")
+    def test_restart_unloads_then_loads_the_single_launchd_owner(self, disable, enable):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td) / ".pmbridge"
+            runtime = relay_runtime.RelayRuntime(
+                home,
+                relay_runtime.RelayConfig(home=home, relay_command=["/bin/relay"], tunnel_command=["/bin/tunnel"]),
+                keychain=relay_runtime.MemoryKeychain({"control-plane": "api-secret", "relay-auth": "bearer-secret"}),
+            )
+            disable.return_value = {"status": "DISABLED", "label": "com.pmbridge.relay"}
+            enable.return_value = {"status": "ENABLED", "label": "com.pmbridge.relay"}
+            with patch.object(runtime, "_terminate_owned_processes"), patch.object(runtime, "_wait_for_ready", return_value=True):
+                result = runtime.restart()
+
+            self.assertEqual(result["status"], "READY")
+            disable.assert_called_once_with(home.resolve())
+            enable.assert_called_once_with(home.resolve())
+
+    @patch("pmbridge.relay_runtime.subprocess.run")
+    def test_owned_process_snapshot_distinguishes_supervisor_data_plane_and_child(self, run):
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td) / ".pmbridge"
+            relay_root = Path(td) / "desktop-relay"
+            daemon = relay_root / "src" / "daemon.ts"
+            commander = relay_root / "node_modules/@wonderwhy-er/desktop-commander/dist/index.js"
+            tunnel = Path(td) / "tunnel-client"
+            runtime = relay_runtime.RelayRuntime(
+                home,
+                relay_runtime.RelayConfig(
+                    home=home,
+                    relay_command=["/node", str(daemon)],
+                    tunnel_command=[str(tunnel), "run", "--profile-dir", str(home / "relay" / "profiles")],
+                ),
+                keychain=relay_runtime.MemoryKeychain(),
+            )
+            managed_home = runtime.home
+            rows = "\n".join([
+                f"101 1 python -m pmbridge.relay_runtime --supervise --home {managed_home}",
+                f"102 101 /node {daemon}",
+                f"103 101 {tunnel} run --profile-dir {managed_home / 'relay' / 'profiles'}",
+                f"104 102 /node {commander}",
+                "105 1 unrelated-process",
+            ])
+            run.return_value = relay_runtime.Completed(returncode=0, stdout=rows, stderr="")
+
+            snapshot = runtime._owned_processes()
+
+            self.assertEqual([(row["pid"], row["kind"]) for row in snapshot], [
+                (101, "supervisor"), (102, "relay"), (103, "tunnel"), (104, "commander")
+            ])
 
     def test_cli_exposes_relay_operator_surface(self):
         args = cli.build_parser().parse_args(["relay", "autostart", "status", "--json"])

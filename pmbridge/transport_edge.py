@@ -38,7 +38,7 @@ def probe(chat_url: str) -> dict:
   tell application "Microsoft Edge"
     repeat with w in windows
       repeat with t in tabs of w
-        if URL of t is targetURL then
+        if URL of t starts with targetURL then
           try
             set resultText to execute t javascript "String(document.title || 'OK')"
             return "OK:" & resultText
@@ -133,7 +133,7 @@ def ui_state(chat_url: str, timeout: float = 4.0) -> dict:
   tell application "Microsoft Edge"
     repeat with w in windows
       repeat with t in tabs of w
-        if URL of t is targetURL then
+        if URL of t starts with targetURL then
           try
             set js to "(()=>{const c=document.querySelector('[contenteditable=\\\"true\\\"][role=\\\"textbox\\\"][aria-label=\\\"Ask ChatGPT\\\"]');const composer=(c?.innerText||'').trim();const placeholder=(c?.getAttribute('aria-placeholder')||c?.getAttribute('data-placeholder')||'').trim();const stop=[...document.querySelectorAll('button')].some(b=>{const a=(b.getAttribute('aria-label')||'').trim();return a==='Stop'||/^Stop (generating|streaming|responding)$/i.test(a)||b.dataset?.testid==='stop-button'});const main=document.querySelector('main');const tail=(main?.innerText||document.body.innerText||'').slice(-500);const signature=[tail,composer,stop?'1':'0'].join('|');return JSON.stringify({reachable:true,composer_text:composer,composer_placeholder:placeholder,composer_nonempty:!!composer,generating:stop,signature,visibility:document.visibilityState,focused:document.hasFocus()});})()"
             return execute t javascript js

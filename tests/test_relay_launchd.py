@@ -32,21 +32,28 @@ class RelayLaunchdTests(unittest.TestCase):
             home = Path(td) / ".pmbridge"
             config = relay_runtime.RelayConfig(home=home, relay_command=["/bin/relay"], tunnel_command=["/bin/tunnel"])
             config.save()
+            destination = home / "LaunchAgents" / "com.pmbridge.relay.plist"
 
-            result = launchd.relay_enable(home)
+            result = launchd.relay_enable(home, destination=destination)
 
             self.assertEqual(result["status"], "ENABLED")
             self.assertEqual(run.call_count, 2)
             self.assertTrue(any("bootstrap" in call.args[0] for call in run.call_args_list))
+            self.assertTrue(destination.exists())
 
     @patch("pmbridge.launchd.subprocess.run")
     def test_relay_autostart_disable_unloads_only_relay_label(self, run):
         with tempfile.TemporaryDirectory() as td:
-            result = launchd.relay_disable(Path(td) / ".pmbridge")
+            home = Path(td) / ".pmbridge"
+            destination = home / "LaunchAgents" / "com.pmbridge.relay.plist"
+            destination.parent.mkdir(parents=True)
+            destination.write_text("plist")
+            result = launchd.relay_disable(home, destination=destination)
 
             self.assertEqual(result["status"], "DISABLED")
             self.assertTrue(any("bootout" in call.args[0] for call in run.call_args_list))
             self.assertTrue(all("com.pmbridge.relay" in call.args[0][-1] or "com.pmbridge.relay" in str(call.args[0]) for call in run.call_args_list))
+            self.assertFalse(destination.exists())
 
 
 if __name__ == "__main__":

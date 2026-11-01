@@ -53,11 +53,13 @@ pmbridge relay autostart status --json
 pmbridge relay autostart disable --json
 ```
 
-`start` is idempotent. `stop` only terminates the PMBridge-owned supervisor. `doctor` reports missing Keychain entries and process health without returning their values.
+`com.pmbridge.relay` is the only supervisor owner. `start`/`restart` load that LaunchAgent; they never spawn a second `pmbridge.relay_runtime --supervise` process. `stop` unloads the agent and terminates only the exact PMBridge-owned supervisor/data-plane/Commander process set. `doctor` reports missing Keychain entries and process health without returning their values.
 
 ## Recovery
 
-The single `com.pmbridge.relay` LaunchAgent owns the relay and tunnel-client children. It waits for relay loopback readiness before starting the tunnel-client, and restarts the pair with bounded backoff if either child exits. Re-running `start` or `autostart enable` does not create a second supervisor.
+The single `com.pmbridge.relay` LaunchAgent owns the relay and tunnel-client children. It waits for relay loopback readiness before starting the tunnel-client, and restarts the pair with bounded backoff if either child exits. A supervisor lock prevents a second top-level owner from entering the data-plane loop. Re-running `start` or `autostart enable` does not create a second supervisor.
+
+The installed `pmbridge` wrapper changes to its runtime directory before importing the package, so invoking it from a checkout cannot accidentally load a different source-tree copy.
 
 For a stuck state:
 

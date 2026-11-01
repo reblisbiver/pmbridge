@@ -26,6 +26,7 @@ def install(home: Path, codex_home=None) -> dict:
     wrapper.write_text(
         '#!/bin/zsh\n'
         f'export PYTHONPATH="{runtime_root}${{PYTHONPATH:+:$PYTHONPATH}}"\n'
+        f'cd "{runtime_root}" || exit 1\n'
         'exec /usr/bin/python3 -m pmbridge.cli "$@"\n',
         encoding='utf-8',
     )

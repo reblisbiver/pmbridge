@@ -15,6 +15,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue((home/'runtime'/'pmbridge'/'cli.py').exists())
             wrapper = (home/'bin'/'pmbridge').read_text(encoding='utf-8')
             self.assertIn('PYTHONPATH', wrapper)
+            self.assertIn(f'cd "{home.resolve()}/runtime"', wrapper)
             self.assertIn('-m pmbridge.cli', wrapper)
             self.assertEqual(result['status'], 'READY')
             self.assertTrue((Path(td)/'.codex'/'pmbridge-read-local.config.toml').exists())

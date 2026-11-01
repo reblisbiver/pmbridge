@@ -1,5 +1,6 @@
 """Lifecycle wrapper for the stock Desktop Relay and OpenAI tunnel-client."""
 
+import fcntl
 import getpass
 import json
 import os
@@ -14,6 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
+from . import launchd
+
 
 API_KEY_NAME = "control-plane"
 RELAY_AUTH_NAME = "relay-auth"
@@ -21,6 +24,7 @@ KEYCHAIN_API_KEY_SERVICE = "pmbridge.control-plane-api-key"
 KEYCHAIN_RELAY_AUTH_SERVICE = "pmbridge.desktop-relay-auth"
 SUPERVISOR_PID_NAME = "supervisor.pid"
 CHILDREN_STATE_NAME = "children.json"
+SUPERVISOR_LOCK_NAME = "supervisor.lock"
 
 
 @dataclass
@@ -197,6 +201,7 @@ class RelayRuntime:
         self.relay_dir = self.home / "relay"
         self.pid_path = self.relay_dir / SUPERVISOR_PID_NAME
         self.children_path = self.relay_dir / CHILDREN_STATE_NAME
+        self.lock_path = self.relay_dir / SUPERVISOR_LOCK_NAME
 
     def _read_pid(self) -> Optional[int]:
         try:
@@ -259,7 +264,8 @@ class RelayRuntime:
 
     def start(self) -> dict:
         current = self.status()
-        if current["supervisor"]["running"]:
+        owned_supervisors = [row for row in self._owned_processes() if row["kind"] == "supervisor"]
+        if current["status"] == "READY" and len(owned_supervisors) == 1:
             return {**current, "status": "ALREADY_RUNNING"}
         api_key, relay_auth = self._credentials()
         missing = []
@@ -269,37 +275,124 @@ class RelayRuntime:
             missing.append("relay-auth")
         if missing:
             return {"status": "NOT_READY", "missing_credentials": missing}
+        if current["status"] != "STOPPED" or owned_supervisors:
+            self.stop()
         self.config.save()
         self.relay_dir.mkdir(parents=True, exist_ok=True)
-        process = subprocess.Popen(
-            [sys.executable, "-m", "pmbridge.relay_runtime", "--supervise", "--home", str(self.home)],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        self.pid_path.write_text(str(process.pid) + "\n", encoding="utf-8")
-        return {"status": "STARTED", "supervisor_pid": process.pid}
+        enabled = launchd.relay_enable(self.home)
+        if enabled.get("status") != "ENABLED":
+            return {"status": "NOT_READY", "autostart": enabled}
+        ready = self._wait_for_ready()
+        result = self.status()
+        result.update({"status": "READY" if ready else "STARTED", "autostart": enabled})
+        return result
+
+    def _wait_for_ready(self, timeout: float = 35.0) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.status()["status"] == "READY":
+                return True
+            time.sleep(0.5)
+        return self.status()["status"] == "READY"
 
     def stop(self) -> dict:
-        pid = self._read_pid()
-        if not _pid_alive(pid):
-            self.pid_path.unlink(missing_ok=True)
-            return {"status": "STOPPED", "already_stopped": True}
-        os.kill(pid, signal.SIGTERM)
+        disabled = launchd.relay_disable(self.home)
+        terminated = self._terminate_owned_processes()
         self.pid_path.unlink(missing_ok=True)
-        return {"status": "STOPPED", "supervisor_pid": pid}
+        self.children_path.unlink(missing_ok=True)
+        return {"status": "STOPPED", "autostart": disabled, "terminated": terminated}
 
     def restart(self) -> dict:
         stopped = self.stop()
         started = self.start()
         return {"status": started.get("status"), "stopped": stopped, "started": started}
 
+    def _owned_processes(self) -> list:
+        try:
+            result = subprocess.run(
+                ["/bin/ps", "-axo", "pid=,ppid=,command="],
+                capture_output=True, text=True, check=False, timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return []
+        if result.returncode != 0:
+            return []
+        relay_command = self.config.relay_command
+        relay_daemon = relay_command[1] if len(relay_command) > 1 else None
+        relay_root = Path(relay_daemon).parent.parent if relay_daemon else None
+        commander = str(relay_root / "node_modules/@wonderwhy-er/desktop-commander/dist/index.js") if relay_root else None
+        tunnel_binary = self.config.tunnel_command[0] if self.config.tunnel_command else None
+        profile_dir = str(self.home / "relay" / "profiles")
+        rows = []
+        for line in result.stdout.splitlines():
+            fields = line.strip().split(None, 2)
+            if len(fields) != 3:
+                continue
+            try:
+                pid, ppid = int(fields[0]), int(fields[1])
+            except ValueError:
+                continue
+            if pid == os.getpid():
+                continue
+            command = fields[2]
+            kind = None
+            if self._is_supervisor_command(command):
+                kind = "supervisor"
+            elif relay_daemon and relay_daemon in command:
+                kind = "relay"
+            elif tunnel_binary and tunnel_binary in command and profile_dir in command:
+                kind = "tunnel"
+            elif commander and commander in command:
+                kind = "commander"
+            if kind:
+                rows.append({"pid": pid, "ppid": ppid, "kind": kind, "command": command})
+        return rows
+
+    def _is_supervisor_command(self, command: str) -> bool:
+        return str(self.home) in command and (
+            ("pmbridge.relay_runtime" in command and "--supervise" in command)
+            or ("pmbridge.cli" in command and "relay supervisor" in command)
+        )
+
+    def _terminate_owned_processes(self) -> dict:
+        initial = self._owned_processes()
+        if not initial:
+            return {"terminated": [], "remaining": []}
+        order = {"supervisor": 0, "tunnel": 1, "relay": 2, "commander": 3}
+        for row in sorted(initial, key=lambda item: order[item["kind"]]):
+            try:
+                os.kill(row["pid"], signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                pass
+        deadline = time.monotonic() + 8
+        remaining = initial
+        while remaining and time.monotonic() < deadline:
+            time.sleep(0.25)
+            remaining = self._owned_processes()
+        if remaining:
+            for row in remaining:
+                try:
+                    os.kill(row["pid"], signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+            time.sleep(0.25)
+            remaining = self._owned_processes()
+        return {
+            "terminated": [{"pid": row["pid"], "kind": row["kind"]} for row in initial],
+            "remaining": [{"pid": row["pid"], "kind": row["kind"]} for row in remaining],
+        }
+
     def supervise(self) -> int:
         api_key, relay_auth = self._credentials()
         if not api_key or not relay_auth:
             return 3
         self.relay_dir.mkdir(parents=True, exist_ok=True)
+        lock = self.lock_path.open("a+")
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock.close()
+            return 0
         self.pid_path.write_text(str(os.getpid()) + "\n", encoding="utf-8")
         stop_requested = {"value": False}
 
@@ -349,6 +442,8 @@ class RelayRuntime:
                 tunnel_log.close()
             for sig, handler in previous.items():
                 signal.signal(sig, handler)
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+            lock.close()
 
     @staticmethod
     def _spawn(command, extra_env, log):

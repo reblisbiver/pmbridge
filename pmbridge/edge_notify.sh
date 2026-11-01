@@ -16,7 +16,7 @@ on run argv
     set foundTab to missing value
     repeat with w in windows
       repeat with t in tabs of w
-        if URL of t is targetURL then
+        if URL of t starts with targetURL then
           set foundTab to t
           exit repeat
         end if
